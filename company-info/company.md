@@ -70,9 +70,11 @@
 - **Philosophy**: 独特な経歴で「技術と言語の架け橋」に挑戦
 - **Profile**: https://lit.link/terisuke
 
+- LT58週連続登壇に挑戦中
+
 ### AIアンバサダー: Cloudia Sorano
 - 福岡弁でテクニカルな話題を発信する社内AI
-- Zenn・XでLT51週連続登壇に挑戦中
+
 - **X**: https://x.com/Cloudia_Cor
 - **Zenn**: https://zenn.dev/cloudia
 
@@ -87,7 +89,7 @@
 - **専門分野**: AI、DX、アプリ開発
 
 ### Contact Information
-- **Website**: https://corweb.co.jp
+- **Website**: https://cor-jp.com
 - **Phone**: 070-8561-1659
 - **お問い合わせ**: https://ssgform.com/s/pHF6ro94xGIy
 - **AI Cloudia Chat**: https://miibo.jp/chat/8b17da34-3051-4645-ad93-1556b02c04cb18f83c6e2b3ea?name=Cloudia
