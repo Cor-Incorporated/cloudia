@@ -1,5 +1,5 @@
 import { GoogleGenAI, GenerateContentResponse, GenerateContentParameters, Tool } from "@google/genai";
-import { CompanyKnowledge, Emotion, Source, GroundingMetadata, GroundingChunk } from '../types';
+import { AppMode, CompanyKnowledge, ContactIntent, Emotion, Source, GroundingMetadata, GroundingChunk } from '../types';
 import { GEMINI_MODEL_NAME, EMOTION_MAP, getSystemInstruction } from '../constants';
 import { searchCompanyURLs, formatCompanySearchResults } from './companyWebSearch';
 
@@ -14,7 +14,7 @@ const ai = new GoogleGenAI({ apiKey: API_KEY });
 const parseEmotionFromText = (text: string): { cleanedText: string, emotion: Emotion } => {
   const emotionRegex = /\[EMOTION:(\w+)\]/i;
   const match = text.match(emotionRegex);
-  let emotion = Emotion.NEUTRAL;
+  let emotion = Emotion.ENJOYING;
   let cleanedText = text;
 
   if (match && match[1]) {
@@ -47,9 +47,11 @@ const extractSources = (groundingMetadata?: GroundingMetadata): Source[] => {
 export const askGemini = async (
   prompt: string,
   knowledge: CompanyKnowledge,
-  currentLocale: string 
+  currentLocale: string,
+  mode: AppMode = 'intake',
+  intent: ContactIntent | null = null,
 ): Promise<{ text: string; emotion: Emotion; sources?: Source[] }> => {
-  const systemInstructionText = getSystemInstruction(currentLocale);
+  const systemInstructionText = getSystemInstruction(currentLocale, mode, intent);
   
   // Search company URLs first if available
   let companySearchResults = '';

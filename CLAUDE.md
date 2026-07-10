@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a React TypeScript application that creates a 3D emotional chat AI using Google's Gemini API. The app features a VRM-based 3D character that displays realistic emotions while providing company-specific answers with real-time calendar integration and web search capabilities.
+This is a React TypeScript application that creates an emotional chat AI using Google's Gemini API. The app features an 8-expression icon avatar (image slots under `public/assets/avatar/`, CSS placeholder fallback) for B2B intake / Contact form substitute use, with company-specific answers, calendar integration, and web search capabilities.
 
 ## Commands
 
@@ -31,18 +31,17 @@ GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 
 1. **ES Modules with Import Maps**: The app uses native ES modules loaded from esm.sh CDN instead of bundling dependencies. This is configured in `index.html`.
 
-2. **VRM 3D Character System**:
-   - **Real VRM Model**: Uses actual VRM files (`.vrm`) with proper bone structure and animations
-   - **Character**: Cloudia (クラウディア.vrm) - a fully rigged 3D character model
-   - **Bone Manipulation**: Direct manipulation of VRM bones for realistic expressions
-   - **Emotion Mapping**: Advanced emotion system with multiple facial expressions
-   - **Performance Optimization**: Ref-based updates bypass React re-renders for smooth animations
+2. **Expression Avatar System** (no WebGL / VRM):
+   - **8 emotions**: HAPPY, ANGRY, SAD, ENJOYING, SURPRISED, SHY, THINKING, PROUD（喜び/怒り/悲しみ/楽しみ/驚き/照れ/考え中/ドヤ顔）
+   - **Assets**: `public/assets/avatar/cloudia-{emotion}.png` with CSS placeholder on load failure
+   - **Component**: `ExpressionAvatar` only — chat remains usable without images
+   - **Modes**: `intake` (default, polite B2B) vs `ambassador` (`?mode=ambassador`, casual)
 
 3. **State Management**: 
    - Language state is managed via React Context (`LanguageContext`)
-   - Chat state and knowledge base are managed in the main `App.tsx` component
-   - Emotion states are derived from AI responses and passed to the 3D character
-   - Character state is managed outside React lifecycle for performance
+   - Chat state, intent, and knowledge base are managed in the main `App.tsx` component
+   - Emotion states are derived from AI responses and passed to `ExpressionAvatar`
+   - Contact intent keys match corsweb ADR-0010 (`?intent=`)
 
 4. **AI Integration with Enhanced Capabilities**:
    - `geminiService.ts` handles all Gemini API interactions with streaming responses
@@ -66,30 +65,19 @@ GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 1. User input → `ChatInput` → `App` state
 2. `App` → `geminiService` → Gemini API (via `/api/gemini` proxy)
 3. Response processing → Parse emotion + content → Update chat messages
-4. Emotion extraction → `CharacterDisplay` → VRM character expression update
+4. Emotion extraction → `ExpressionAvatar` → expression image / placeholder update
 5. Calendar sync → `calendarService` → Parse iCal → Include in AI context
 6. Web search triggers → `companyWebSearch` → Washington proxy → Search results
 
-### 3D Character Technical Details
+### Expression Avatar Details
 
-**VRM Model Integration**:
-- Loads `.vrm` files using `@pixiv/three-vrm` library
-- Validates bone structure on load (hips, spine, chest, arms, etc.)
-- Applies initial pose to avoid T-pose display
-- Supports complex facial expressions through bone manipulation
+**Assets**:
+- Path convention: `/assets/avatar/cloudia-{emotion}.png`
+- Missing images fall back to colored CSS placeholders
+- See `public/assets/avatar/README.md` and `constants/avatarAssets.ts`
 
-**Expression System**:
-- **NEUTRAL**: Default relaxed expression
-- **HAPPY**: Upward mouth movement, raised cheeks
-- **SAD**: Downward mouth, drooped features
-- **ANGRY**: Furrowed brow, tight expression
-- **SURPRISED**: Wide eyes, open mouth
-- **THINKING**: Tilted head, contemplative pose
-
-**Performance Optimizations**:
-- Direct bone manipulation without triggering React re-renders
-- Cached bone references for fast updates
-- Smooth transition animations between expressions
+**Emotion tags in model replies**:
+`[EMOTION:HAPPY|ANGRY|SAD|ENJOYING|SURPRISED|SHY|THINKING|PROUD]`
 
 ### Calendar System Architecture
 
@@ -134,10 +122,9 @@ GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 - Knowledge is included in AI system prompt for context-aware responses
 - Chat history is not persisted between sessions (intentional design choice)
 
-### 3D Character Assets
-- VRM model located in `/public/assets/vrm/クラウディア.vrm`
-- Additional animation files supported (`.vrma` format)
-- Character assets are loaded asynchronously with proper error handling
+### Avatar Assets
+- Expression images under `/public/assets/avatar/`
+- Official art can be dropped in later using the path convention above
 
 ### Search Integration
 - Web search automatically triggered by keywords like "latest", "recent", "current"
@@ -157,10 +144,9 @@ GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 - Test with real iCal URLs in production environment
 - Verify Japanese character encoding works correctly
 
-### 3D Character Development
-- Character expressions can be tested by manually calling emotion functions
-- VRM model can be replaced by updating the file path in `threeCharacter.ts`
-- Bone structure validation helps ensure compatibility with different VRM models
+### Avatar Development
+- Toggle emotions via AI tags or by setting `currentEmotion` in `App`
+- Replace art by updating PNG files under `public/assets/avatar/`
 
 ### API Proxy Development
 - Netlify Functions in `/api/` folder handle server-side operations
@@ -168,6 +154,4 @@ GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 - Ensure environment variables are properly configured
 
 ### Performance Monitoring
-- Monitor 3D character render performance
-- Watch for memory leaks in VRM model loading
 - Optimize calendar parsing for large calendars if needed

@@ -1,11 +1,20 @@
 export const translations = {
   en: {
-    title: "3D Emotional Chat AI",
-    welcomeMessage: "Hey there! I'm Cloudia Sorano, Cor.inc's AI Ambassador! 🚀 I've got all the company info, upcoming events, and can dive into our social media for the latest tech buzz. What can I help you with today?",
+    title: "Cloudia — Cor. AI Reception",
+    welcomeMessage:
+      "Hello. I'm Cloudia, Cor. Inc.'s AI receptionist. I'll organize your inquiry in about 5–7 questions and hand it off to our team. Please do not enter confidential information such as customer names, personal data, or contract text. First, choose the purpose of your inquiry.",
+    welcomeMessageAmbassador:
+      "Hey there! I'm Cloudia Sorano, Cor.inc's AI Ambassador! 🚀 I've got all the company info, upcoming events, and can dive into our social media for the latest tech buzz. What can I help you with today?",
+    piiNotice:
+      "Do not enter confidential information during the chat (customer names, personal data, contracts, etc.). Contact details are collected only at the final submit step.",
+    intentPickerLabel: "Inquiry purpose",
+    intentPickerPrompt: "What is the purpose of your inquiry?",
+    intentSelected: "Selected purpose: {{label}}",
     knowledgeUpdated: "Company knowledge updated. I'll use this information for my next answers.",
     thinking: "Thinking...",
     sendMessage: "Send",
     typeYourMessage: "Type your message...",
+    typeYourMessageIntake: "Describe your inquiry (no confidential details)...",
     companyKnowledgeBase: "Company Knowledge Base",
     companyInfoMarkdown: "Company Information (Markdown)",
     companyInfoPlaceholder: "Paste company information, policies, FAQs, etc. in Markdown format.",
@@ -19,14 +28,24 @@ export const translations = {
     aiError: "Sorry, I encountered an error. Please try again.",
     aiDefaultError: "Error communicating with AI",
     sources: "Sources",
+    selectIntentFirst: "Please select an inquiry purpose above before sending a message.",
   },
   ja: {
-    title: "3D感情チャットAI",
-    welcomeMessage: "おっす！クラウディア・ソラノっちゃん、Cor.incのAIアンバサダーやけん！🚀 会社の情報も、今度のイベントも、SNSの最新情報も全部知っとうよ〜。なんか聞きたいことあると？",
+    title: "Cloudia — Cor. AI受付",
+    welcomeMessage:
+      "こんにちは。Cor.株式会社のAI受付 Cloudiaです。5〜7問でご相談内容を整理し、担当者へ引き継ぎます。顧客名、個人情報、契約書本文などの機密情報は入力しないでください。まず、ご相談の目的を選んでください。",
+    welcomeMessageAmbassador:
+      "おっす！クラウディア・ソラノっちゃん、Cor.incのAIアンバサダーやけん！🚀 会社の情報も、今度のイベントも、SNSの最新情報も全部知っとうよ〜。なんか聞きたいことあると？",
+    piiNotice:
+      "会話中に機密情報（顧客名、個人情報、契約書本文など）は入力しないでください。連絡先は最終送信時のみお伺いします。",
+    intentPickerLabel: "ご相談の目的",
+    intentPickerPrompt: "ご相談の目的を選んでください。",
+    intentSelected: "選択中の目的: {{label}}",
     knowledgeUpdated: "会社の知識が更新されました。次回の回答からこの情報を使用します。",
-    thinking: "ちょっと待っとって...",
+    thinking: "確認しています…",
     sendMessage: "送信",
-    typeYourMessage: "なんか聞きたいこと書いて〜",
+    typeYourMessage: "メッセージを入力…",
+    typeYourMessageIntake: "ご相談内容を入力（機密情報は不可）…",
     companyKnowledgeBase: "企業ナレッジベース",
     companyInfoMarkdown: "会社情報（マークダウン）",
     companyInfoPlaceholder: "会社情報、ポリシー、FAQなどをマークダウン形式で貼り付けてください。",
@@ -40,13 +59,13 @@ export const translations = {
     aiError: "申し訳ありません、エラーが発生しました。もう一度お試しください。",
     aiDefaultError: "AIとの通信エラー",
     sources: "情報源",
+    selectIntentFirst: "メッセージを送る前に、上のご相談目的を選択してください。",
   },
 };
 
 export type Locale = keyof typeof translations;
 
 // Ensure all keys are present in all languages, defaulting to 'en' if a key is missing.
-// This is a simple check; for larger apps, a more robust i18n library might be used.
 Object.keys(translations.en).forEach(key => {
   if (!translations.ja[key as keyof typeof translations.en]) {
     console.warn(`Missing Japanese translation for key: ${key}`);
