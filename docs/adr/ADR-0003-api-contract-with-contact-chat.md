@@ -1,42 +1,72 @@
 # ADR-0003 contact-chat API 契約（corsweb）
 
-## ステータス: Accepted (2026-07-10)
+## ステータス: Accepted (2026-07-10) / Revised (2026-07-10)
 
 ## 背景
+
 - 現状 Gemini / Netlify Functions で会話しており、corsweb のリード基盤と分断されている。
-- Contact フォーム代用にするには、PII 境界と通知経路を corsweb と統一する必要がある。
+- 要件: 要約確認、PII 最終収集、spam 分類、メール認証、Turnstile、レート制限。
+- corsweb に `workers/contact-chat` が既に存在し、PII 境界が設計済み。
 
 ## 決定
 
 ### API 正本
-corsweb `workers/contact-chat`:
 
-| Method | Path | 用途 |
-|---|---|---|
-| POST | `/api/contact/chat` | 会話・分類。PII を要求・保存しない |
-| POST | `/api/contact/submit` | 氏名・メール等。PII はメールのみ。LLM に渡さない |
-| GET | `/api/contact/health` | 死活 |
+corsweb `workers/contact-chat`（本番は同一オリジン `cor-jp.com/api/contact/*`）:
+
+| Method | Path | 用途 | PII |
+|---|---|---|---|
+| POST | `/api/contact/chat` | 会話・分類。構造化ヒアリング | **要求・保存しない** |
+| POST | `/api/contact/submit` | 氏名・メール等の確定送信 | メール本文のみ。**LLM に渡さない** |
+| GET | `/api/contact/health` | 死活 | なし |
 
 ### クライアント方針
-1. 本番埋め込み時は **同一オリジン**（`cor-jp.com`）で呼ぶ。
-2. `intent` / `source` / UTM / 会話要約を submit に載せる（Worker 側スキーマ拡張が必要なら corsweb Issue）。
-3. 表示上の `reply` は **textContent のみ**（XSS 防止。corsweb ContactChat と同方針）。
-4. 最終形は **handoff リダイレクトのみにしない**。API 直結で送信完了まで Cloudia 内で行う。
-5. 障害時は corsweb の最小フォーム / 電話へフォールバック。
 
-### 段階
+1. 本番埋め込み / 同一オリジン時は **相対パス**で呼ぶ。
+2. 表示上の `reply` は **textContent のみ**（XSS 防止。Markdown HTML 化しない）。
+3. 最終形は handoff リダイレクトのみにしない。**Cloudia 内で送信完了**まで行う。
+4. 障害時は corsweb 最小フォーム / 電話へフォールバック。
+
+### 現行 Worker レスポンス（chat）
+
+```ts
+{ reply: string; classification: 'genuine' | 'sales' | 'spam'; readyForContact: boolean }
+```
+
+### 拡張計画（corsweb #250 と同時）
+
 | 段階 | 内容 |
 |---|---|
-| P1 | API 直結（chat + submit）。必要なら Worker に intent フィールド追加 |
-| P2 | 構造化フィールドを Worker と型共有。計測イベント連携 |
+| **P1a** | 既存 chat + submit 直結。intent / source / UTM / conversationSummary を submit に載せる |
+| **P1b** | spam risk score、営業 3 段階キューヒント、structured fields |
+| **P1c** | メールアドレス認証（magic link / OTP）エンドポイント |
+| **P2** | 受付番号、管理 API、計測イベント |
+
+### submit に載せる情報（目標）
+
+- name, email, company, message
+- conversationSummary（要約・利用者修正後）
+- classification / spamRiskScore（サーバ再計算可）
+- intent, source, UTM
+- turnstileToken, website（ハニーポット）
+
+### LLM 権限
+
+- LLM は `/chat` の会話応答と分類ヒントのみ。
+- **メール送信・永続化は Worker の決定論的コード**が実行（要件原則 2）。
 
 ## 理由
-- PII を LLM に渡さない既存設計を再利用する。
+
 - 二重のメール通知経路を避ける。
+- 既存の PII 境界を再利用する。
+- Chatwoot 等の外部 Inbox を挟まない（ADR-0005）。
 
 ## 影響
-- `services/geminiService.ts` 等を contact-chat クライアントに置換または分岐。
-- corsweb Worker のスキーマ拡張 Issue と同時進行。
+
+- Cloudia: Gemini 直結を contact-chat クライアントへ置換または分岐。
+- corsweb Worker スキーマ拡張は #250。
 
 ## 代替案
-- **常に `/contact/?intent=` へ飛ばすだけ**: フォーム代用にならないため最終形としては却下。
+
+- **常に `/contact/?intent=` へ飛ばすだけ**: フォーム代用にならないため最終形として却下。
+- **Chatwoot Agent Bot 経由**: 運用・PII・ブランド分断のため却下（ADR-0005）。
