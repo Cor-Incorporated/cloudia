@@ -110,7 +110,7 @@ const App: React.FC = () => {
       {/* Header for Language Switcher */}
       <header id="app-header" className="bg-gray-800 shadow-md p-2 flex justify-between items-center gap-2">
         <div className="flex items-center gap-3 min-w-0">
-          <ExpressionAvatar emotion={isLoading ? Emotion.THINKING : currentEmotion} size={48} className="shrink-0" />
+          <ExpressionAvatar emotion={isLoading ? Emotion.THINKING : currentEmotion} size={48} compact className="shrink-0" />
           <div className="min-w-0">
             <h1 className="text-sm sm:text-base font-semibold truncate">{t('title')}</h1>
             {appMode === 'ambassador' && (
@@ -154,7 +154,7 @@ const App: React.FC = () => {
             )}
           </div>
           <div
-            className="flex-grow p-6 space-y-4 overflow-y-auto custom-scrollbar"
+            className="flex-grow p-4 sm:p-6 space-y-1 overflow-y-auto custom-scrollbar bg-gray-900/40"
             aria-live="polite"
             aria-relevant="additions"
           >
