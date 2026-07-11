@@ -6,7 +6,7 @@ An innovative React TypeScript application that creates an immersive 3D emotiona
 
 ### 🎭 3D Character with Emotions
 - **VRM Model Integration**: Loads and displays 3D VRM characters (currently featuring Cloudia)
-- **Emotional Expressions**: Character changes expressions based on AI responses (NEUTRAL, HAPPY, SAD, ANGRY, SURPRISED, THINKING)
+- **Emotional Expressions**: 8 PNG faces (HAPPY, ANGRY, SAD, ENJOYING, SURPRISED, SHY, THINKING, PROUD)
 - **Real-time Animation**: Smooth transitions between emotional states during conversations
 
 ### 🤖 AI-Powered Conversations
@@ -96,13 +96,13 @@ npm run preview
 ```
 src/
 ├── components/          # React components
-│   ├── CharacterDisplay.tsx    # 3D VRM character renderer
+│   ├── ExpressionAvatar.tsx    # 8-expression icon avatar (image + CSS fallback)
 │   ├── ChatInput.tsx           # User input component
 │   ├── ChatMessage.tsx         # Message display component
 │   └── KnowledgeInput.tsx      # Knowledge base editor
 ├── services/            # Core services
 │   ├── geminiService.ts        # Gemini API integration
-│   ├── threeCharacter.ts       # 3D character management
+│   ├── (avatar images under public/assets/avatar/)
 │   ├── calendarService.ts      # Calendar integration
 │   ├── companyWebSearch.ts     # Web search functionality
 │   └── knowledgeLoader.ts      # Company knowledge loader

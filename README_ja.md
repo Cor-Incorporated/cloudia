@@ -96,13 +96,13 @@ npm run preview
 ```
 src/
 ├── components/          # Reactコンポーネント
-│   ├── CharacterDisplay.tsx    # 3D VRMキャラクターレンダラー
+│   ├── ExpressionAvatar.tsx    # 8表情アイコンアバター（画像 + CSSフォールバック）
 │   ├── ChatInput.tsx           # ユーザー入力コンポーネント
 │   ├── ChatMessage.tsx         # メッセージ表示コンポーネント
 │   └── KnowledgeInput.tsx      # ナレッジベースエディター
 ├── services/            # コアサービス
 │   ├── geminiService.ts        # Gemini API統合
-│   ├── threeCharacter.ts       # 3Dキャラクター管理
+│   ├── （アバター画像は public/assets/avatar/）
 │   ├── calendarService.ts      # カレンダー統合
 │   ├── companyWebSearch.ts     # Web検索機能
 │   └── knowledgeLoader.ts      # 企業ナレッジローダー

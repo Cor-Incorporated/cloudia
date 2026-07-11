@@ -4,11 +4,17 @@ import { useLanguage } from '../contexts/LanguageContext';
 interface ChatInputProps {
   onSendMessage: (text: string) => void;
   isLoading: boolean;
+  placeholderKey?: 'typeYourMessage' | 'typeYourMessageIntake';
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }) => {
+const ChatInput: React.FC<ChatInputProps> = ({
+  onSendMessage,
+  isLoading,
+  placeholderKey = 'typeYourMessage',
+}) => {
   const [inputText, setInputText] = useState('');
   const { t } = useLanguage();
+  const placeholder = t(placeholderKey);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,10 +29,10 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading }) => {
         type="text"
         value={inputText}
         onChange={(e) => setInputText(e.target.value)}
-        placeholder={t('typeYourMessage')}
+        placeholder={placeholder}
         className="flex-grow p-3 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-shadow"
         disabled={isLoading}
-        aria-label={t('typeYourMessage')}
+        aria-label={placeholder}
       />
       <button
         type="submit"
