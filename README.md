@@ -179,3 +179,15 @@ For issues or questions:
 
 - [日本語版README](README_ja.md)
 - [Company Website](https://cor-jp.com)
+
+## Phase 1 Contact (corsweb)
+
+- **intents** (ADR-0014, 7 keys): see `constants/intents.ts` including `contract-dev`
+- **API**: `services/contactChatClient.ts` → `POST /api/contact/chat` and `/submit`
+- Env:
+  - `VITE_CONTACT_API_BASE` — e.g. empty for same-origin, or Preview Worker origin
+  - `VITE_CONTACT_CHAT_MOCK=1` — mock chat/submit for local UI QA
+  - `VITE_FALLBACK_CONTACT_URL` — default `https://cor-jp.com/contact/`
+- **Embed**: open with `?embed=1` for compact header (iframe /corsweb #254)
+- **LINE UI**: left Cloudia avatar + bubble, right user bubble; plain-text replies
+
