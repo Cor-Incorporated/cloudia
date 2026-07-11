@@ -25,13 +25,17 @@ export enum Emotion {
 /** intake = Contact 本線（敬語）。ambassador = SNS/デモ（方言可） */
 export type AppMode = 'intake' | 'ambassador';
 
-/** corsweb ADR-0010 正本 intent キー */
+/**
+ * corsweb ADR-0014 正本 intent 7 キー
+ * contract-dev のみ Phase 3 で Grift 自動ハンドオフ。Phase 1 はキー受理 + 従来フロー。
+ */
 export type ContactIntent =
   | 'confidential-ai-assessment'
   | 'local-llm-poc'
   | 'grift-team-beta'
   | 'grift-paid-trial'
   | 'estimate-audit'
+  | 'contract-dev'
   | 'press-speaking-other';
 
 export interface CompanyKnowledge {
@@ -50,15 +54,15 @@ export interface CompanyURL {
 export interface Source {
   uri: string;
   title: string;
-  [key: string]: any; // Allow other properties from API
+  [key: string]: any;
 }
 
 export interface GroundingChunk {
   web?: Source;
-  [key: string]: any; // Allow other grounding types
+  [key: string]: any;
 }
 
 export interface GroundingMetadata {
   groundingChunks?: GroundingChunk[];
-  [key: string]: any; // Allow other metadata properties
+  [key: string]: any;
 }

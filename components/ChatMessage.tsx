@@ -1,43 +1,33 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
 import { Message, Emotion, Source } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
+import ExpressionAvatar from './ExpressionAvatar';
 
 interface ChatMessageProps {
   message: Message;
+  /** intake では textContent 相当（XSS 防止）。ambassador もプレーンで統一可 */
+  plainText?: boolean;
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, plainText = true }) => {
   const { t } = useLanguage();
   const isUser = message.sender === 'user';
-  const bgColor = isUser ? 'bg-blue-600' : 'bg-gray-700';
-  const textAlign = isUser ? 'text-right' : 'text-left';
-  const bubbleAlign = isUser ? 'ml-auto' : 'mr-auto';
-  
-  const emotionToEmoji = (emotion?: Emotion): string => {
-    if (!emotion) return '';
-    switch(emotion) {
-        case Emotion.HAPPY: return '😊';
-        case Emotion.ANGRY: return '😠';
-        case Emotion.SAD: return '😢';
-        case Emotion.ENJOYING: return '😄';
-        case Emotion.SURPRISED: return '😮';
-        case Emotion.SHY: return '😳';
-        case Emotion.THINKING: return '🤔';
-        case Emotion.PROUD: return '😎';
-        default: return '';
-    }
-  }
+  const emotion = message.emotion ?? Emotion.ENJOYING;
 
   const renderSources = (sources?: Source[]) => {
     if (!sources || sources.length === 0) return null;
     return (
-      <div className="mt-2 pt-2 border-t border-gray-600">
+      <div className="mt-2 pt-2 border-t border-gray-600/60">
         <h4 className="text-xs font-semibold text-gray-400 mb-1">{t('sources')}:</h4>
         <ul className="list-disc list-inside space-y-1">
           {sources.map((source, index) => (
             <li key={index} className="text-xs">
-              <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">
+              <a
+                href={source.uri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-300 hover:text-blue-200 underline"
+              >
                 {source.title || source.uri}
               </a>
             </li>
@@ -45,25 +35,32 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         </ul>
       </div>
     );
-  }
+  };
 
-  // 表情はヘッダー／サイドの ExpressionAvatar が主。バブル側 emoji は控えめに。
-  const showEmoji =
-    message.emotion &&
-    message.emotion !== Emotion.ENJOYING &&
-    message.emotion !== Emotion.THINKING;
-
+  // LINE 風: 左 AI（アバター + 吹き出し）、右 ユーザー
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
-      <div className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl px-4 py-3 rounded-xl shadow ${bgColor} ${bubbleAlign}`}>
-        <div className={`${textAlign} text-white prose prose-sm prose-invert max-w-none`}>
-           <ReactMarkdown
-            components={{
-                a: ({node, ...props}) => <a className="text-blue-300 hover:underline" {...props} />,
-              }}
-           >{message.text + (showEmoji ? ` ${emotionToEmoji(message.emotion)}` : '')}</ReactMarkdown>
+    <div
+      className={`flex w-full mb-3 items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}
+    >
+      {!isUser && (
+        <div className="shrink-0 self-end pb-0.5">
+          <ExpressionAvatar emotion={emotion} size={40} compact />
         </div>
-        {renderSources(message.sources)}
+      )}
+      <div
+        className={[
+          'max-w-[75%] sm:max-w-md lg:max-w-lg px-3.5 py-2.5 shadow-md text-sm leading-relaxed whitespace-pre-wrap break-words',
+          isUser
+            ? 'bg-blue-600 text-white rounded-2xl rounded-br-md'
+            : 'bg-gray-700 text-gray-50 rounded-2xl rounded-bl-md',
+        ].join(' ')}
+      >
+        {plainText ? (
+          <p className="m-0">{message.text}</p>
+        ) : (
+          <p className="m-0">{message.text}</p>
+        )}
+        {!isUser && renderSources(message.sources)}
       </div>
     </div>
   );

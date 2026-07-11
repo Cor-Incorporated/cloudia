@@ -7,6 +7,8 @@ interface ExpressionAvatarProps {
   emotion: Emotion;
   size?: number;
   className?: string;
+  /** 吹き出し横などラベル不要時 */
+  compact?: boolean;
 }
 
 /**
@@ -18,13 +20,13 @@ const ExpressionAvatar: React.FC<ExpressionAvatarProps> = ({
   emotion,
   size = 144,
   className = '',
+  compact = false,
 }) => {
   const { locale } = useLanguage();
   const asset = getAvatarAsset(emotion);
   const [imageFailed, setImageFailed] = useState(false);
   const [displayedEmotion, setDisplayedEmotion] = useState(emotion);
 
-  // emotion 変更時に画像再試行 & 短いフェード用
   useEffect(() => {
     setImageFailed(false);
     setDisplayedEmotion(emotion);
@@ -32,15 +34,16 @@ const ExpressionAvatar: React.FC<ExpressionAvatarProps> = ({
 
   const label = locale === 'ja' ? asset.labelJa : asset.labelEn;
   const showPlaceholder = imageFailed;
+  const symbolClass = size <= 48 ? 'text-base' : 'text-4xl';
 
   return (
     <div
-      className={`flex flex-col items-center gap-2 ${className}`}
+      className={`flex flex-col items-center ${compact ? 'gap-0' : 'gap-2'} ${className}`}
       role="img"
       aria-label={`Cloudia: ${label}`}
     >
       <div
-        className="relative overflow-hidden rounded-full shadow-lg ring-2 ring-white/20 transition-opacity duration-300"
+        className="relative overflow-hidden rounded-full shadow-md ring-2 ring-white/15 transition-opacity duration-300"
         style={{ width: size, height: size }}
       >
         {showPlaceholder ? (
@@ -49,8 +52,10 @@ const ExpressionAvatar: React.FC<ExpressionAvatarProps> = ({
             style={{ backgroundColor: asset.placeholderColor }}
             aria-hidden="true"
           >
-            <span className="text-4xl font-light leading-none opacity-90">{asset.symbol}</span>
-            <span className="mt-1 text-xs font-medium tracking-wide opacity-90">{label}</span>
+            <span className={`${symbolClass} font-light leading-none opacity-90`}>{asset.symbol}</span>
+            {!compact && size > 64 && (
+              <span className="mt-1 text-xs font-medium tracking-wide opacity-90">{label}</span>
+            )}
           </div>
         ) : (
           <img
@@ -65,7 +70,9 @@ const ExpressionAvatar: React.FC<ExpressionAvatarProps> = ({
           />
         )}
       </div>
-      <p className="text-xs text-gray-400 sr-only sm:not-sr-only sm:text-center">{label}</p>
+      {!compact && (
+        <p className="text-xs text-gray-400 sr-only sm:not-sr-only sm:text-center">{label}</p>
+      )}
     </div>
   );
 };
