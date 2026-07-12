@@ -89,7 +89,7 @@
 | API | corsweb `workers/contact-chat` |
 | intent キー | corsweb ADR-0010 |
 | ホスト | Cloudflare |
-| リポ | `Cor-Incorporated/cloudia`（Transfer 後・推奨名） |
+| リポ | `Cor-Incorporated/cloudia`（移管済み） |
 | 統合 | corsweb ADR-0012 / Issue #59 #254 |
 
 詳細決定: `docs/adr/`（ADR-0001〜0007）。

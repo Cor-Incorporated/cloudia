@@ -1,11 +1,11 @@
 # Architecture Decision Records (ADR) — Cloudia
 
-本リポジトリ（現: `terisuke/3d-emotional-chat-ai` → 目標: `Cor-Incorporated/cloudia`）の決定記録。
+本リポジトリ（`Cor-Incorporated/cloudia`、旧: `terisuke/3d-emotional-chat-ai`）の決定記録。
 
 ## 最終ゴール（固定）
 
 1. **お問い合わせフォームの代用チャットボット**として `Cor-Incorporated/corsweb2024` に統合する（専用 URL または `/contact/` 主 UI）
-2. GitHub リポジトリを **`Cor-Incorporated` org へ移管**する（推奨名: `cloudia`）
+2. GitHub リポジトリを **`Cor-Incorporated` org へ移管**する（**完了**: `cloudia`）
 3. ホスティングを **Netlify → Cloudflare** に寄せる
 4. バックエンド API 正本は corsweb の **`workers/contact-chat`**（`cor-jp.com/api/contact/*`）
 5. UI は **LINE 風吹き出し + Cloudia 8 表情**（3D/VRM 不採用、Chatwoot 不採用）
