@@ -10,7 +10,7 @@ import FallbackNotice from './components/FallbackNotice';
 import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
-import { getIntentLabel, parseContactIntent } from './constants/intents';
+import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import {
   isContactChatMock,
   postContactChat,
@@ -434,9 +434,6 @@ const App: React.FC = () => {
             <ExpressionAvatar emotion={displayEmotion} size={48} compact className="shrink-0" />
             <div className="min-w-0">
               <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base">{t('title')}</h1>
-              {appMode === 'ambassador' && (
-                <p className="truncate text-xs text-slate-500">ambassador mode</p>
-              )}
               {isContactChatMock() && appMode === 'intake' && (
                 <p className="truncate text-xs text-amber-700">contact-chat MOCK</p>
               )}
@@ -537,7 +534,7 @@ const App: React.FC = () => {
                 )}
                 {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState === 'started' && selectedIntent && (
                   <p className="ml-10 mt-0.5 max-w-2xl text-xs text-slate-500" role="status">
-                    {t('intentSelected', { label: getIntentLabel(selectedIntent, locale) })}
+                    {t('intentSelected', { label: getIntentDisplayLabel(selectedIntent, locale) })}
                   </p>
                 )}
               </React.Fragment>
