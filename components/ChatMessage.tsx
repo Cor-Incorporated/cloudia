@@ -17,8 +17,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, plainText = true }) 
   const renderSources = (sources?: Source[]) => {
     if (!sources || sources.length === 0) return null;
     return (
-      <div className="mt-2 pt-2 border-t border-gray-600/60">
-        <h4 className="text-xs font-semibold text-gray-400 mb-1">{t('sources')}:</h4>
+      <div className="mt-2 border-t border-slate-200 pt-2">
+        <h4 className="mb-1 text-xs font-semibold text-slate-500">{t('sources')}:</h4>
         <ul className="list-disc list-inside space-y-1">
           {sources.map((source, index) => (
             <li key={index} className="text-xs">
@@ -26,7 +26,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, plainText = true }) 
                 href={source.uri}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-300 hover:text-blue-200 underline"
+                className="text-blue-700 underline hover:text-blue-900"
               >
                 {source.title || source.uri}
               </a>
@@ -40,7 +40,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, plainText = true }) 
   // LINE 風: 左 AI（アバター + 吹き出し）、右 ユーザー
   return (
     <div
-      className={`flex w-full mb-3 items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}
+      className={`mb-3 flex w-full items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}
     >
       {!isUser && (
         <div className="shrink-0 self-end pb-0.5">
@@ -49,10 +49,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, plainText = true }) 
       )}
       <div
         className={[
-          'max-w-[75%] sm:max-w-md lg:max-w-lg px-3.5 py-2.5 shadow-md text-sm leading-relaxed whitespace-pre-wrap break-words',
+          'max-w-[calc(100%-3rem)] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ring-1 ring-black/5 whitespace-pre-wrap break-words sm:max-w-xl',
           isUser
-            ? 'bg-blue-600 text-white rounded-2xl rounded-br-md'
-            : 'bg-gray-700 text-gray-50 rounded-2xl rounded-bl-md',
+            ? 'rounded-br-md bg-blue-600 text-white'
+            : 'rounded-bl-md bg-white text-slate-800',
         ].join(' ')}
       >
         {plainText ? (

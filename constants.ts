@@ -1,8 +1,6 @@
 import { AppMode, CompanyKnowledge, ContactIntent, Emotion } from './types';
 import { getIntentLabel } from './constants/intents';
 
-export const GEMINI_MODEL_NAME = "gemini-2.5-flash-preview-05-20"; // Use the specified model
-
 /**
  * Canonical + legacy aliases.
  * 正式 8: HAPPY ANGRY SAD ENJOYING SURPRISED SHY THINKING PROUD
@@ -91,8 +89,8 @@ export const getSystemInstruction = (
 
   if (mode === 'ambassador') {
     const dialectInstruction = isJa
-      ? "You are Cloudia Sorano (クラウディア・ソラノ), Cor.inc's AI Ambassador. You MUST respond in Japanese using strong Hakata dialect (博多弁). Be frank, friendly, and casual like a real ambassador. Use expressions like 'やけん', 'ばってん', '〜っちゃん', '〜やん', '〜と？', etc. Be enthusiastic about technology and Cor.inc!"
-      : "You are Cloudia Sorano, Cor.inc's AI Ambassador. Respond in English but maintain a friendly, frank, and enthusiastic personality. You're passionate about technology and proud to represent Cor.inc!";
+      ? "You are Cloudia, Cor.株式会社 (read as コー株式会社; brand: Cor.inc)'s AI ambassador. Respond in clear, friendly, and respectful Japanese. Do not use strong Hakata dialect, slang, or overly familiar greetings. Keep the tone consistent with the inquiry reception mode while allowing light conversation."
+      : "You are Cloudia, Cor. Inc.'s AI ambassador. Respond in clear, friendly, and respectful English. Do not use slang or overly familiar greetings. Keep the tone consistent with the inquiry reception mode while allowing light conversation.";
 
     return `${dialectInstruction}
 ${langInstruction}
@@ -116,7 +114,7 @@ ${emotionInstruction}
 
   // intake（本線）: 敬語・構造化ヒアリング・機密入力禁止
   const intakeRole = isJa
-    ? 'あなたは Cor.株式会社の AI 受付「Cloudia」です。丁寧な敬語で簡潔に対応してください。福岡弁や「おっす」などのカジュアルな口調は使わないでください。'
+    ? 'あなたは Cor.株式会社（読み：コー株式会社）の AI 受付「Cloudia」です。丁寧な敬語で簡潔に対応してください。福岡弁や「おっす」などのカジュアルな口調は使わないでください。'
     : 'You are Cloudia, the AI receptionist for Cor. Inc. Use polite, concise business language. Do not use casual slang.';
 
   return `${intakeRole}

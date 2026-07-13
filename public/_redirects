@@ -1,0 +1,4 @@
+# The edge worker strips /contact/chat before forwarding to Pages.
+# Keep assets as real files; only the client-side ambassador route needs an SPA fallback.
+/ambassador /index.html 200
+/ambassador/* /index.html 200

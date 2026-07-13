@@ -4,7 +4,7 @@
 
 ## 背景
 
-- 現状 Gemini / Netlify Functions で会話しており、corsweb のリード基盤と分断されている。
+- 決定前は Cloudia 固有の会話経路が corsweb のリード基盤と分断されていた。
 - 要件: 要約確認、PII 最終収集、spam 分類、メール認証、Turnstile、レート制限。
 - corsweb に `workers/contact-chat` が既に存在し、PII 境界が設計済み。
 
@@ -63,7 +63,7 @@ corsweb `workers/contact-chat`（本番は同一オリジン `cor-jp.com/api/con
 
 ## 影響
 
-- Cloudia: Gemini 直結を contact-chat クライアントへ置換または分岐。
+- Cloudia: intake / ambassador とも contact-chat クライアントへ統一済み。AIプロバイダー認証はWorker側だけで扱う。
 - corsweb Worker スキーマ拡張は #250。
 
 ## 代替案

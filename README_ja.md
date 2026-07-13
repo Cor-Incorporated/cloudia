@@ -1,6 +1,6 @@
 # 3D感情チャットAI
 
-Google GeminiAPIを使用した没入型3D感情チャットAIアプリケーション。感情を表現する3Dキャラクター（VRM）が、企業特化の回答を行うReact TypeScriptアプリケーションです。
+8表情のCloudiaアバターを備えたReact TypeScript製のAI受付です。会話はcorswebのサーバー側contact gatewayを経由し、AIプロバイダーの認証情報をブラウザへ渡しません。
 
 ## ✨ 機能
 
@@ -10,9 +10,8 @@ Google GeminiAPIを使用した没入型3D感情チャットAIアプリケーシ
 - **リアルタイムアニメーション**: 会話中の感情状態の滑らかな遷移
 
 ### 🤖 AI搭載会話システム
-- **Gemini統合**: Google Gemini APIを活用したインテリジェントな回答
-- **企業ナレッジベース**: 企業情報とリアルタイムカレンダーデータの統合
-- **Web検索機能**: ワシントンプロキシ経由のWeb検索機能でグローバルアクセシビリティを実現
+- **サーバー側AI**: intake・ambassadorの両モードが`/api/contact/chat`を使用
+- **企業ナレッジベース**: 企業文脈とsystem instructionはWorker側で構築
 - **感情検出**: AIが回答に適した感情を自動判定
 
 ### 📅 カレンダー統合
@@ -31,20 +30,20 @@ Google GeminiAPIを使用した没入型3D感情チャットAIアプリケーシ
 ### モダンテックスタック
 - **フロントエンド**: React 18 + TypeScript + Vite
 - **3Dグラフィックス**: Three.js + VRMモデルサポート
-- **AI統合**: Google Gemini API + ストリーミングレスポンス
+- **AI統合**: corsweb contact-chat Worker配下のVertex Gemini
 - **スタイリング**: Tailwind CSS（レスポンシブデザイン）
 - **状態管理**: React Context（言語・アプリ状態）
 
 ### 革新的設計決定
 - **Import MapsによるESモジュール**: 依存関係バンドリングの代わりにesm.sh CDNからネイティブESモジュールを使用
 - **Refベース3D更新**: キャラクター表情更新がReactの再レンダーをバイパスしパフォーマンス向上
-- **プロキシアーキテクチャ**: グローバルWeb検索アクセス用ワシントンベースプロキシサーバー
+- **Gatewayアーキテクチャ**: ブラウザ側AI認証情報を持たない同一オリジンAPI
 - **文字エンコーディング**: 日本語カレンダー統合のための高度UTF-8処理
 
 ## 📋 前提条件
 
 - **Node.js** (v18以上)
-- **Gemini APIキー** (Google AI Studioより)
+- 稼働中のcorsweb contact-chat Workerへのアクセス
 - **Googleカレンダー** パブリックiCal URL（オプション）
 
 ## 🛠 セットアップ・インストール
@@ -58,14 +57,11 @@ npm install
 `.env.local`ファイルを作成し、以下の変数を設定：
 
 ```env
-GEMINI_API_KEY=your_actual_gemini_api_key
+VITE_CONTACT_API_BASE=https://your-contact-worker.example.com
 GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 ```
 
-**APIキーの取得方法:**
-1. [Google AI Studio](https://aistudio.google.com/)にアクセス
-2. 新しいAPIキーを作成
-3. キーを`.env.local`ファイルにコピー
+GeminiやVertexの認証情報は`.env.local`へ設定しません。Cloudiaのローカル開発では指定したcontact-chat Workerを呼ぶか、UI確認用に`VITE_CONTACT_CHAT_MOCK=1`を使用します。
 
 **カレンダー設定（オプション）:**
 1. Googleカレンダーを開く
@@ -74,7 +70,7 @@ GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 4. パブリックiCal URLをコピー
 
 ### 3. 企業設定
-`/company-info/company.md`を編集し、企業詳細をMarkdown形式で記述してください。このコンテンツはAIが企業特化回答に使用します。
+モデルが使用する企業情報はcorsweb側で管理します。このリポジトリのMarkdownは参照用であり、ブラウザからモデルへ直接送信されません。
 
 ### 4. 開発サーバー起動
 ```bash
@@ -101,15 +97,14 @@ src/
 │   ├── ChatMessage.tsx         # メッセージ表示コンポーネント
 │   └── KnowledgeInput.tsx      # ナレッジベースエディター
 ├── services/            # コアサービス
-│   ├── geminiService.ts        # Gemini API統合
+│   ├── contactChatClient.ts    # サーバー側チャットGatewayクライアント
 │   ├── （アバター画像は public/assets/avatar/）
 │   ├── calendarService.ts      # カレンダー統合
 │   ├── companyWebSearch.ts     # Web検索機能
 │   └── knowledgeLoader.ts      # 企業ナレッジローダー
 ├── contexts/            # Reactコンテキスト
 │   └── LanguageContext.tsx     # 言語管理
-├── api/                 # Netlify Functions
-│   ├── gemini.ts               # Gemini APIプロキシ
+├── api/                 # 旧カレンダーエンドポイントのみ
 │   └── calendar.ts             # カレンダーAPIプロキシ
 └── company-info/        # 企業ナレッジベース
     └── company.md              # 企業情報（Markdown）
@@ -121,7 +116,6 @@ src/
 2. **感情観察**: 回答に基づく3Dキャラクターの表情変化を観察
 3. **言語切り替え**: 言語セレクターで日本語・英語を切り替え
 4. **企業クエリ**: 企業情報、イベント、スケジュールについて質問
-5. **Web検索**: 最新情報を取得するWeb検索をトリガーする質問
 
 ## 🔧 技術詳細
 
@@ -131,26 +125,18 @@ src/
 - **パフォーマンス最適化**: Reactの再レンダーなしでボーン直接操作
 
 ### AI統合
-- **ストリーミングレスポンス**: Geminiからのリアルタイムレスポンスストリーミング
-- **コンテキスト管理**: 会話履歴と企業ナレッジの維持
-- **感情解析**: AI回答から感情指標の抽出
+- **Contact Gateway**: 上限付き会話履歴とmode・locale・intentを送信
+- **コンテキスト管理**: 企業情報とプロバイダーpromptはサーバー内に保持
+- **安全なエラー表示**: プロバイダーやインフラの内部情報を利用者へ表示しない
 
 ### カレンダー統合
 - **iCal解析**: GoogleカレンダーiCal形式のカスタムパーサー
 - **エンコーディング処理**: 日本語コンテンツの高度UTF-8サポート
 - **日付フィルタリング**: 関連する今後のイベントのスマートフィルタリング
 
-### Web検索プロキシ
-- **グローバルアクセス**: 国際検索アクセス用ワシントンベースプロキシ
-- **CORS処理**: クライアントサイドアプリケーションとのシームレス統合
-- **検索統合**: 特定キーワードでトリガーされる自動Web検索
-
 ## 🌍 デプロイ
 
-アプリケーションはNetlifyでのデプロイ用に設定済み：
-- **Netlify Functions**: Gemini・カレンダー用サーバーサイドAPIプロキシ
-- **エッジネットワーク**: グローバルCDN配信
-- **環境変数**: セキュアなAPIキー管理
+本番の問い合わせ画面はcorswebへmountし、同一オリジンの`/api/contact/*` Workerを呼びます。`netlify.toml`は旧カレンダーpreview経路のためだけに残しており、NetlifyのAI Functionはありません。
 
 ## 🤝 コントリビューション
 

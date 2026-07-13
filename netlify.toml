@@ -6,8 +6,8 @@
   NODE_VERSION = "20"
 
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  from = "/api/calendar"
+  to = "/.netlify/functions/calendar"
   status = 200
 
 [functions]

@@ -9,55 +9,59 @@ export interface HandoffValues {
 }
 
 interface HandoffFormProps {
+  values: HandoffValues;
+  onChange: (values: HandoffValues) => void;
   disabled?: boolean;
+  onBack: () => void;
+  onCancel: () => void;
   onSubmit: (values: HandoffValues) => void;
 }
 
-const HandoffForm: React.FC<HandoffFormProps> = ({ disabled, onSubmit }) => {
+const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, onBack, onCancel, onSubmit }) => {
   const { t } = useLanguage();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [company, setCompany] = useState('');
-  const [message, setMessage] = useState('');
   // honeypot
   const [website, setWebsite] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (website) return; // bot
-    if (!name.trim() || !email.trim()) return;
+    if (!values.name.trim() || !values.email.trim()) return;
     onSubmit({
-      name: name.trim(),
-      email: email.trim(),
-      company: company.trim(),
-      message: message.trim(),
+      name: values.name.trim(),
+      email: values.email.trim(),
+      company: values.company.trim(),
+      message: values.message.trim(),
     });
   };
 
+  const update = (field: keyof HandoffValues, value: string) => {
+    onChange({ ...values, [field]: value });
+  };
+
   const field =
-    'w-full p-2.5 rounded-lg bg-gray-700 border border-gray-600 text-gray-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none';
+    'min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100';
 
   return (
-    <form onSubmit={handleSubmit} className="relative space-y-3 p-4 border-t border-gray-700 bg-gray-800/80">
-      <p className="text-sm text-gray-200 font-medium">{t('handoffTitle')}</p>
-      <p className="text-xs text-gray-400">{t('handoffHint')}</p>
+    <form onSubmit={handleSubmit} className="relative space-y-3 border-t border-slate-200 bg-white p-4">
+      <p className="text-sm font-medium text-slate-900">{t('handoffTitle')}</p>
+      <p className="text-xs text-slate-500">{t('handoffHint')}</p>
       <div className="grid gap-2 sm:grid-cols-2">
-        <label className="text-xs text-gray-300 space-y-1">
+        <label className="space-y-1 text-xs text-slate-700">
           <span>{t('handoffName')}</span>
-          <input className={field} value={name} onChange={(e) => setName(e.target.value)} required disabled={disabled} autoComplete="name" />
+          <input className={field} value={values.name} onChange={(e) => update('name', e.target.value)} required disabled={disabled} autoComplete="name" />
         </label>
-        <label className="text-xs text-gray-300 space-y-1">
+        <label className="space-y-1 text-xs text-slate-700">
           <span>{t('handoffEmail')}</span>
-          <input className={field} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={disabled} autoComplete="email" />
+          <input className={field} type="email" value={values.email} onChange={(e) => update('email', e.target.value)} required disabled={disabled} autoComplete="email" />
         </label>
       </div>
-      <label className="text-xs text-gray-300 space-y-1 block">
+      <label className="block space-y-1 text-xs text-slate-700">
         <span>{t('handoffCompany')}</span>
-        <input className={field} value={company} onChange={(e) => setCompany(e.target.value)} disabled={disabled} autoComplete="organization" />
+        <input className={field} value={values.company} onChange={(e) => update('company', e.target.value)} disabled={disabled} autoComplete="organization" />
       </label>
-      <label className="text-xs text-gray-300 space-y-1 block">
+      <label className="block space-y-1 text-xs text-slate-700">
         <span>{t('handoffMessage')}</span>
-        <textarea className={field + ' min-h-[72px]'} value={message} onChange={(e) => setMessage(e.target.value)} disabled={disabled} />
+        <textarea className={field + ' min-h-[72px]'} value={values.message} onChange={(e) => update('message', e.target.value)} disabled={disabled} />
       </label>
       {/* honeypot */}
       <div className="absolute -left-[9999px] opacity-0 h-0 overflow-hidden" aria-hidden="true">
@@ -66,13 +70,31 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ disabled, onSubmit }) => {
           <input tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
         </label>
       </div>
-      <button
-        type="submit"
-        disabled={disabled}
-        className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 text-white text-sm font-semibold rounded-lg"
-      >
-        {t('handoffSubmit')}
-      </button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onBack}
+          className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        >
+          {t('backToChat')}
+        </button>
+        <button
+          type="submit"
+          disabled={disabled}
+          className="min-h-11 w-full rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300 sm:w-auto"
+        >
+          {t('handoffSubmit')}
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onCancel}
+          className="min-h-11 w-full px-2 py-2.5 text-sm text-slate-500 underline underline-offset-2 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        >
+          {t('cancelConversation')}
+        </button>
+      </div>
     </form>
   );
 };

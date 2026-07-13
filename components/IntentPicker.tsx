@@ -7,15 +7,16 @@ interface IntentPickerProps {
   selected: ContactIntent | null;
   onSelect: (intent: ContactIntent) => void;
   disabled?: boolean;
+  describedBy?: string;
 }
 
-const IntentPicker: React.FC<IntentPickerProps> = ({ selected, onSelect, disabled }) => {
+const IntentPicker: React.FC<IntentPickerProps> = ({ selected, onSelect, disabled, describedBy }) => {
   const { locale, t } = useLanguage();
 
   return (
-    <div className="space-y-2" role="group" aria-label={t('intentPickerLabel')}>
-      <p className="text-sm text-gray-300">{t('intentPickerPrompt')}</p>
-      <div className="flex flex-wrap gap-2">
+    <fieldset className="space-y-2" aria-describedby={describedBy}>
+      <legend className="text-sm font-medium text-gray-800">{t('intentPickerPrompt')}</legend>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="group" aria-label={t('intentPickerLabel')}>
         {CONTACT_INTENT_KEYS.map((key) => {
           const isSelected = selected === key;
           return (
@@ -25,10 +26,10 @@ const IntentPicker: React.FC<IntentPickerProps> = ({ selected, onSelect, disable
               disabled={disabled}
               onClick={() => onSelect(key)}
               className={[
-                'rounded-full px-3 py-1.5 text-sm transition-colors border',
+                'min-h-11 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
                 isSelected
-                  ? 'bg-blue-600 border-blue-500 text-white'
-                  : 'bg-gray-700 border-gray-600 text-gray-100 hover:bg-gray-600',
+                  ? 'border-blue-600 bg-blue-600 text-white'
+                  : 'border-gray-300 bg-white text-gray-800 hover:border-blue-400 hover:bg-blue-50',
                 disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
               ].join(' ')}
               aria-pressed={isSelected}
@@ -38,7 +39,7 @@ const IntentPicker: React.FC<IntentPickerProps> = ({ selected, onSelect, disable
           );
         })}
       </div>
-    </div>
+    </fieldset>
   );
 };
 

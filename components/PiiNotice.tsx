@@ -6,7 +6,7 @@ const PiiNotice: React.FC = () => {
 
   return (
     <p
-      className="rounded-md bg-amber-900/40 px-4 py-3 text-sm text-amber-100 ring-1 ring-amber-600/50"
+      className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950 ring-1 ring-amber-200"
       role="note"
     >
       {t('piiNotice')}

@@ -10,6 +10,11 @@ export interface AvatarAsset {
   symbol: string;
 }
 
+const assetPath = (filename: string): string => {
+  const base = import.meta.env?.BASE_URL || '/';
+  return `${base.replace(/\/?$/, '/')}assets/avatar/${filename}`;
+};
+
 /**
  * 提供アセット（表情差分 8 枚）との対応:
  * 01 喜び / 02 怒り / 03 悲しみ / 04 楽しみ /
@@ -17,56 +22,56 @@ export interface AvatarAsset {
  */
 export const AVATAR_ASSETS: Record<Emotion, AvatarAsset> = {
   [Emotion.HAPPY]: {
-    src: '/assets/avatar/cloudia-happy.png',
+    src: assetPath('cloudia-happy.png'),
     labelJa: '喜び',
     labelEn: 'Happy',
     placeholderColor: '#f59e0b',
     symbol: '＾',
   },
   [Emotion.ANGRY]: {
-    src: '/assets/avatar/cloudia-angry.png',
+    src: assetPath('cloudia-angry.png'),
     labelJa: '怒り',
     labelEn: 'Angry',
     placeholderColor: '#ef4444',
     symbol: '×',
   },
   [Emotion.SAD]: {
-    src: '/assets/avatar/cloudia-sad.png',
+    src: assetPath('cloudia-sad.png'),
     labelJa: '悲しみ',
     labelEn: 'Sad',
     placeholderColor: '#60a5fa',
     symbol: '＿',
   },
   [Emotion.ENJOYING]: {
-    src: '/assets/avatar/cloudia-enjoying.png',
+    src: assetPath('cloudia-enjoying.png'),
     labelJa: '楽しみ',
     labelEn: 'Enjoying',
     placeholderColor: '#34d399',
     symbol: '〜',
   },
   [Emotion.SURPRISED]: {
-    src: '/assets/avatar/cloudia-surprised.png',
+    src: assetPath('cloudia-surprised.png'),
     labelJa: '驚き',
     labelEn: 'Surprised',
     placeholderColor: '#a78bfa',
     symbol: '！',
   },
   [Emotion.SHY]: {
-    src: '/assets/avatar/cloudia-shy.png',
+    src: assetPath('cloudia-shy.png'),
     labelJa: '照れ',
     labelEn: 'Shy',
     placeholderColor: '#f472b6',
     symbol: '///',
   },
   [Emotion.THINKING]: {
-    src: '/assets/avatar/cloudia-thinking.png',
+    src: assetPath('cloudia-thinking.png'),
     labelJa: '考え中',
     labelEn: 'Thinking',
     placeholderColor: '#94a3b8',
     symbol: '…',
   },
   [Emotion.PROUD]: {
-    src: '/assets/avatar/cloudia-proud.png',
+    src: assetPath('cloudia-proud.png'),
     labelJa: 'ドヤ顔',
     labelEn: 'Proud',
     placeholderColor: '#fbbf24',

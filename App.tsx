@@ -7,15 +7,14 @@ import IntentPicker from './components/IntentPicker';
 import PiiNotice from './components/PiiNotice';
 import HandoffForm, { HandoffValues } from './components/HandoffForm';
 import FallbackNotice from './components/FallbackNotice';
-import { Message, Emotion, CompanyKnowledge, ContactIntent, AppMode } from './types';
-import { loadCompanyKnowledge } from './services/knowledgeLoader';
+import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
 import { getIntentLabel, parseContactIntent } from './constants/intents';
 import {
-  buildConversationSummary,
   isContactChatMock,
   postContactChat,
+  postContactChatStart,
   postContactSubmit,
   toApiMessages,
   type Classification as ApiClassification,
@@ -23,6 +22,49 @@ import {
 
 // Classification re-export helper
 type Classif = ApiClassification;
+
+const EMPTY_HANDOFF_VALUES: HandoffValues = {
+  name: '',
+  email: '',
+  company: '',
+  message: '',
+};
+
+function sessionStorageKey(mode: AppMode, locale: string, intent: ContactIntent | null): string {
+  return `cloudia:contact-session:${mode}:${locale}:${intent ?? 'none'}`;
+}
+
+function readSessionId(mode: AppMode, locale: string, intent: ContactIntent | null): string | null {
+  if (typeof window === 'undefined' || !intent) return null;
+  try {
+    const value = window.sessionStorage.getItem(sessionStorageKey(mode, locale, intent));
+    return value && value.trim() ? value.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberSessionId(mode: AppMode, locale: string, intent: ContactIntent | null, sessionId: string): void {
+  if (typeof window === 'undefined' || !intent || !sessionId.trim()) return;
+  try {
+    window.sessionStorage.setItem(sessionStorageKey(mode, locale, intent), sessionId.trim());
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+function forgetSessionId(mode: AppMode, locale: string, intent: ContactIntent | null): void {
+  if (typeof window === 'undefined' || !intent) return;
+  try {
+    window.sessionStorage.removeItem(sessionStorageKey(mode, locale, intent));
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
 
 const App: React.FC = () => {
   const { locale, setLocale, t } = useLanguage();
@@ -35,16 +77,29 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentEmotion, setCurrentEmotion] = useState<Emotion>(Emotion.ENJOYING);
-  const [companyKnowledge, setCompanyKnowledge] = useState<CompanyKnowledge>({ markdownContent: '', calendarInfo: '' });
   const [selectedIntent, setSelectedIntent] = useState<ContactIntent | null>(() => {
     if (typeof window === 'undefined') return null;
     return parseContactIntent(new URLSearchParams(window.location.search).get('intent'));
   });
+  const [sessionId, setSessionId] = useState<string | null>(() => readSessionId(appMode, locale, selectedIntent));
+  const idempotencyKeyRef = useRef(uuidv4());
+  const initialIntentFromUrlRef = useRef(selectedIntent);
+  const autoStartPendingRef = useRef(Boolean(selectedIntent));
+  const startAttemptRef = useRef<string | null>(null);
+  const messagesRef = useRef<Message[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [intentStartState, setIntentStartState] = useState<'idle' | 'starting' | 'started'>('idle');
   const [readyForContact, setReadyForContact] = useState(false);
   const [showHandoff, setShowHandoff] = useState(false);
+  const [handoffDraft, setHandoffDraft] = useState<HandoffValues>(EMPTY_HANDOFF_VALUES);
+  const [conversationSummary, setConversationSummary] = useState('');
   const [classification, setClassification] = useState<Classif>('genuine');
   const [apiDegraded, setApiDegraded] = useState(false);
+  const [lastFailedInput, setLastFailedInput] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [activeRequest, setActiveRequest] = useState<'start' | 'chat' | 'submit' | null>(null);
+  const requestAbortRef = useRef<AbortController | null>(null);
+  const submitLockRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,42 +112,151 @@ const App: React.FC = () => {
     setCurrentEmotion(Emotion.ENJOYING);
     setReadyForContact(false);
     setShowHandoff(false);
+    setHandoffDraft(EMPTY_HANDOFF_VALUES);
+    setConversationSummary('');
     setSubmitted(false);
+    setSessionId(readSessionId(appMode, locale, selectedIntent));
+    idempotencyKeyRef.current = uuidv4();
+    setIntentStartState('idle');
+    startAttemptRef.current = null;
+    if (initialIntentFromUrlRef.current) {
+      autoStartPendingRef.current = true;
+    }
   }, [t, appMode]);
 
   useEffect(() => {
-    const loadKnowledge = async () => {
-      try {
-        const knowledge = await loadCompanyKnowledge();
-        setCompanyKnowledge(knowledge);
-      } catch {
-        setCompanyKnowledge({
-          markdownContent: '# Company Information\nError loading company data.',
-          calendarInfo: '## Calendar: Error loading calendar data.',
-          companyUrls: [],
-        });
-      }
-    };
-    loadKnowledge();
-  }, []);
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const chatReady = appMode === 'ambassador' || intentStartState === 'started';
+
+  useEffect(() => {
+    if (!chatReady || isLoading) return;
+    inputRef.current?.focus();
+  }, [chatReady, isLoading]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, isLoading, showHandoff]);
 
+  const beginRequest = useCallback((kind: 'start' | 'chat' | 'submit'): AbortController => {
+    requestAbortRef.current?.abort();
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
+    setActiveRequest(kind);
+    setIsLoading(true);
+    return controller;
+  }, []);
+
+  const finishRequest = useCallback((controller: AbortController) => {
+    if (requestAbortRef.current !== controller) return;
+    requestAbortRef.current = null;
+    setActiveRequest(null);
+    setIsLoading(false);
+  }, []);
+
+  const handleStopRequest = useCallback(() => {
+    const controller = requestAbortRef.current;
+    if (!controller) return;
+    const requestKind = activeRequest;
+    controller.abort();
+    requestAbortRef.current = null;
+    setActiveRequest(null);
+    setIsLoading(false);
+    setApiDegraded(false);
+    setCurrentEmotion(Emotion.ENJOYING);
+    if (requestKind === 'start') {
+      startAttemptRef.current = null;
+      setIntentStartState('idle');
+    }
+  }, [activeRequest]);
+
+  const startConversation = useCallback(async (intent: ContactIntent, requestedSessionId = sessionId) => {
+    const attemptKey = `${locale}:${intent}`;
+    if (startAttemptRef.current === attemptKey || intentStartState === 'started') return;
+
+    startAttemptRef.current = attemptKey;
+    setIntentStartState('starting');
+    const controller = beginRequest('start');
+    setApiDegraded(false);
+    setLastFailedInput(null);
+    setCurrentEmotion(Emotion.THINKING);
+
+    try {
+      const result = await postContactChatStart(toApiMessages(messagesRef.current), {
+        mode: appMode,
+        locale,
+        intent,
+        sessionId: requestedSessionId,
+        source: 'cloudia',
+      }, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (result.sessionId) {
+        setSessionId(result.sessionId);
+        rememberSessionId(appMode, locale, intent, result.sessionId);
+      }
+      if (result.summary) setConversationSummary(result.summary);
+      setClassification(result.classification);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uuidv4(),
+          text: result.reply,
+          sender: 'ai',
+          emotion: result.readyForContact ? Emotion.HAPPY : Emotion.ENJOYING,
+        },
+      ]);
+      if (result.readyForContact) {
+        setReadyForContact(true);
+      }
+      setIntentStartState('started');
+      setCurrentEmotion(result.readyForContact ? Emotion.HAPPY : Emotion.ENJOYING);
+    } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) return;
+      startAttemptRef.current = null;
+      setIntentStartState('idle');
+      setApiDegraded(true);
+      setCurrentEmotion(Emotion.SAD);
+    } finally {
+      finishRequest(controller);
+    }
+  }, [appMode, beginRequest, finishRequest, intentStartState, locale, sessionId]);
+
   const handleSelectIntent = useCallback((intent: ContactIntent) => {
+    const requestedSessionId = selectedIntent === intent ? sessionId : null;
+    if (selectedIntent !== intent) setSessionId(null);
     setSelectedIntent(intent);
+    autoStartPendingRef.current = false;
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.set('intent', intent);
       window.history.replaceState({}, '', url.toString());
     }
-  }, []);
+    void startConversation(intent, requestedSessionId);
+  }, [selectedIntent, sessionId, startConversation]);
 
-  const handleSendMessage = useCallback(async (inputText: string) => {
+  useEffect(() => {
+    if (
+      appMode !== 'intake' ||
+      !selectedIntent ||
+      messages.length === 0 ||
+      !autoStartPendingRef.current ||
+      intentStartState !== 'idle'
+    ) {
+      return;
+    }
+    autoStartPendingRef.current = false;
+    void startConversation(selectedIntent);
+  }, [appMode, intentStartState, messages.length, selectedIntent, startConversation]);
+
+  const handleRetryStart = useCallback(() => {
+    if (selectedIntent) void startConversation(selectedIntent);
+  }, [selectedIntent, startConversation]);
+
+  const handleSendMessage = useCallback(async (inputText: string, retrying = false) => {
     if (!inputText.trim() || submitted) return;
 
-    if (appMode === 'intake' && !selectedIntent) {
+    if (appMode === 'intake' && (!selectedIntent || !chatReady)) {
       const notice: Message = {
         id: uuidv4(),
         text: t('selectIntentFirst'),
@@ -105,86 +269,131 @@ const App: React.FC = () => {
     }
 
     const newUserMessage: Message = { id: uuidv4(), text: inputText, sender: 'user' };
-    const nextMessages = [...messages, newUserMessage];
-    setMessages(nextMessages);
-    setIsLoading(true);
+    const nextMessages = retrying ? messages : [...messages, newUserMessage];
+    if (!retrying) setMessages(nextMessages);
+    if (!retrying) setLastFailedInput(null);
+    const controller = beginRequest('chat');
     setCurrentEmotion(Emotion.THINKING);
 
     try {
-      if (appMode === 'ambassador') {
-        // 遅延 import で API_KEY 未設定時のモジュール throw を intake 本線から隔離
-        const { askGemini } = await import('./services/geminiService');
-        const { text: aiResponseText, emotion: aiEmotion, sources } = await askGemini(
-          inputText,
-          companyKnowledge,
-          locale,
-          appMode,
-          selectedIntent,
-        );
-        setMessages((prev) => [
-          ...prev,
-          { id: uuidv4(), text: aiResponseText, sender: 'ai', emotion: aiEmotion, sources },
-        ]);
-        setCurrentEmotion(aiEmotion);
-      } else {
-        const apiMessages = toApiMessages(nextMessages);
-        // intent を最初の文脈として付与（Worker が system に載せていなくても会話に残る）
-        if (selectedIntent && apiMessages.length === 1) {
-          apiMessages.unshift({
-            role: 'assistant',
-            content: `Inquiry intent selected: ${selectedIntent} (${getIntentLabel(selectedIntent, locale)}).`,
-          });
-        }
-        const result = await postContactChat(apiMessages);
-        setApiDegraded(false);
-        setClassification(result.classification);
-        if (result.readyForContact) {
-          setReadyForContact(true);
-          setShowHandoff(true);
-        }
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: uuidv4(),
-            text: result.reply,
-            sender: 'ai',
-            emotion: result.readyForContact ? Emotion.ENJOYING : Emotion.EMPATHETIC as Emotion,
-          },
-        ]);
-        // EMPATHETIC was removed — use SHY/ENJOYING
-        setCurrentEmotion(result.readyForContact ? Emotion.HAPPY : Emotion.ENJOYING);
+      const apiMessages = toApiMessages(nextMessages);
+      const result = await postContactChat(apiMessages, {
+        mode: appMode,
+        locale,
+        intent: selectedIntent,
+        sessionId,
+        source: 'cloudia',
+      }, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (result.sessionId) {
+        setSessionId(result.sessionId);
+        rememberSessionId(appMode, locale, selectedIntent, result.sessionId);
       }
-    } catch (error) {
-      console.error('Chat error:', error);
-      setApiDegraded(true);
-      const errorMessageText =
-        error instanceof Error ? `${t('aiDefaultError')}: ${error.message}` : t('aiError');
+      if (result.summary) setConversationSummary(result.summary);
+      setLastFailedInput(null);
+      setApiDegraded(false);
+      setClassification(result.classification);
+      if (result.readyForContact) {
+        setReadyForContact(true);
+      }
       setMessages((prev) => [
         ...prev,
-        { id: uuidv4(), text: errorMessageText, sender: 'ai', emotion: Emotion.SAD },
+        {
+          id: uuidv4(),
+          text: result.reply,
+          sender: 'ai',
+          emotion: result.readyForContact ? Emotion.HAPPY : Emotion.ENJOYING,
+        },
+      ]);
+      setCurrentEmotion(result.readyForContact ? Emotion.HAPPY : Emotion.ENJOYING);
+    } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) return;
+      setLastFailedInput(inputText);
+      setApiDegraded(true);
+      setMessages((prev) => [
+        ...prev,
+        { id: uuidv4(), text: t('aiError'), sender: 'ai', emotion: Emotion.SAD },
       ]);
       setCurrentEmotion(Emotion.SAD);
     } finally {
-      setIsLoading(false);
+      finishRequest(controller);
     }
-  }, [messages, companyKnowledge, locale, t, appMode, selectedIntent, submitted]);
+  }, [beginRequest, chatReady, finishRequest, messages, locale, t, appMode, selectedIntent, submitted, sessionId]);
 
-  // Fix emotion: remove EMPATHETIC cast - I already set ENJOYING/HAPPY above but left a bad cast in message - fix App
+  const handleRetryChat = useCallback(() => {
+    if (lastFailedInput) void handleSendMessage(lastFailedInput, true);
+  }, [handleSendMessage, lastFailedInput]);
+
+  const buildModeHref = useCallback((mode: AppMode | null): string => {
+    if (typeof window === 'undefined') return mode === 'ambassador' ? '/contact/chat/ambassador/' : '/contact/chat/';
+    const url = new URL(window.location.href);
+    const productionHost = window.location.hostname === 'cor-jp.com';
+    url.pathname = mode === 'ambassador' && productionHost ? '/contact/chat/ambassador/' : '/contact/chat/';
+    url.searchParams.delete('mode');
+    if (mode === 'ambassador' && !productionHost) url.searchParams.set('mode', 'ambassador');
+    url.searchParams.delete('intent');
+    return `${url.pathname}${url.search}${url.hash}`;
+  }, []);
+
+  const handleStartNewConversation = useCallback(() => {
+    if (!submitted && messages.length > 1 && typeof window !== 'undefined' && !window.confirm(t('newConversationConfirm'))) {
+      return;
+    }
+
+    handleStopRequest();
+    forgetSessionId(appMode, locale, selectedIntent);
+    setSelectedIntent(null);
+    setSessionId(null);
+    setMessages([{
+      id: uuidv4(),
+      text: t(appMode === 'ambassador' ? 'welcomeMessageAmbassador' : 'welcomeMessage'),
+      sender: 'ai',
+      emotion: Emotion.ENJOYING,
+    }]);
+    setCurrentEmotion(Emotion.ENJOYING);
+    setReadyForContact(false);
+    setShowHandoff(false);
+    setHandoffDraft(EMPTY_HANDOFF_VALUES);
+    setConversationSummary('');
+    setClassification('genuine');
+    setApiDegraded(false);
+    setLastFailedInput(null);
+    setSubmitted(false);
+    setIntentStartState('idle');
+    startAttemptRef.current = null;
+    initialIntentFromUrlRef.current = null;
+    autoStartPendingRef.current = false;
+    idempotencyKeyRef.current = uuidv4();
+    submitLockRef.current = false;
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('intent');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [appMode, handleStopRequest, locale, messages.length, selectedIntent, submitted, t]);
+
   const handleHandoff = useCallback(async (values: HandoffValues) => {
-    setIsLoading(true);
+    if (submitLockRef.current || submitted) return;
+    submitLockRef.current = true;
+    const controller = beginRequest('submit');
+    const handoffMessage = values.message.trim() || conversationSummary.trim() || t('handoffDefaultMessage');
     try {
-      const summary = buildConversationSummary(messages, selectedIntent);
       await postContactSubmit({
+        sessionId,
+        idempotencyKey: idempotencyKeyRef.current,
         name: values.name,
         email: values.email,
         company: values.company,
-        message: values.message || summary.slice(0, 500),
-        conversationSummary: summary,
+        message: handoffMessage,
+        summaryText: conversationSummary,
         classification,
         intent: selectedIntent,
         source: 'cloudia',
         website: '',
-      });
+      }, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setLastFailedInput(null);
+      setHandoffDraft(EMPTY_HANDOFF_VALUES);
       setSubmitted(true);
       setShowHandoff(false);
       setMessages((prev) => [
@@ -194,53 +403,72 @@ const App: React.FC = () => {
       setCurrentEmotion(Emotion.HAPPY);
       setApiDegraded(false);
     } catch (error) {
-      console.error('Submit error:', error);
+      if (controller.signal.aborted || isAbortError(error)) return;
       setApiDegraded(true);
       setMessages((prev) => [
         ...prev,
         {
           id: uuidv4(),
-          text: error instanceof Error ? `${t('aiDefaultError')}: ${error.message}` : t('aiError'),
+          text: t('aiError'),
           sender: 'ai',
           emotion: Emotion.SAD,
         },
       ]);
       setCurrentEmotion(Emotion.SAD);
     } finally {
-      setIsLoading(false);
+      submitLockRef.current = false;
+      finishRequest(controller);
     }
-  }, [messages, selectedIntent, classification, t]);
+  }, [beginRequest, conversationSummary, finishRequest, selectedIntent, classification, sessionId, submitted, t]);
 
   const displayEmotion = isLoading ? Emotion.THINKING : currentEmotion;
+  const shellClass = embedMode
+    ? 'flex h-dvh min-h-[520px] w-full overflow-hidden bg-slate-100 text-slate-900'
+    : 'flex h-dvh min-h-dvh overflow-hidden bg-slate-100 text-slate-900';
 
   return (
-    <div className={`flex flex-col h-screen max-h-screen overflow-hidden bg-gray-900 text-gray-100 ${embedMode ? 'pt-0' : ''}`} style={embedMode ? { paddingTop: 0 } : undefined}>
+    <div className={`${shellClass} flex-col`} data-embed={embedMode ? 'true' : 'false'}>
       {!embedMode && (
-        <header id="app-header" className="bg-gray-800 shadow-md p-2 flex justify-between items-center gap-2">
-          <div className="flex items-center gap-3 min-w-0">
+        <header id="app-header" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex-nowrap sm:px-5">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <ExpressionAvatar emotion={displayEmotion} size={48} compact className="shrink-0" />
             <div className="min-w-0">
-              <h1 className="text-sm sm:text-base font-semibold truncate">{t('title')}</h1>
+              <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base">{t('title')}</h1>
               {appMode === 'ambassador' && (
-                <p className="text-xs text-gray-400 truncate">ambassador mode</p>
+                <p className="truncate text-xs text-slate-500">ambassador mode</p>
               )}
               {isContactChatMock() && appMode === 'intake' && (
-                <p className="text-xs text-amber-400 truncate">contact-chat MOCK</p>
+                <p className="truncate text-xs text-amber-700">contact-chat MOCK</p>
               )}
             </div>
           </div>
-          <div className="flex items-center space-x-2 shrink-0">
+          <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+            {(selectedIntent || messages.length > 1 || submitted) && (
+              <button
+                type="button"
+                onClick={handleStartNewConversation}
+                className="min-h-11 px-1 text-xs font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:text-sm"
+              >
+                {t('newConversation')}
+              </button>
+            )}
+            <a
+              href={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
+              className="min-h-11 px-1 py-3 text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:text-sm"
+            >
+              {t(appMode === 'ambassador' ? 'intakeLink' : 'ambassadorLink')}
+            </a>
             <button
               type="button"
               onClick={() => setLocale('en')}
-              className={`px-3 py-1 text-sm rounded ${locale === 'en' ? 'bg-blue-600 text-white' : 'bg-gray-600 hover:bg-gray-500 text-gray-200'}`}
+              className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${locale === 'en' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               English
             </button>
             <button
               type="button"
               onClick={() => setLocale('ja')}
-              className={`px-3 py-1 text-sm rounded ${locale === 'ja' ? 'bg-blue-600 text-white' : 'bg-gray-600 hover:bg-gray-500 text-gray-200'}`}
+              className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${locale === 'ja' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               日本語
             </button>
@@ -249,37 +477,70 @@ const App: React.FC = () => {
       )}
 
       {embedMode && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-gray-800 border-b border-gray-700">
+        <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
           <ExpressionAvatar emotion={displayEmotion} size={36} compact />
-          <span className="text-sm font-medium truncate">{t('title')}</span>
+          <span className="truncate text-sm font-medium text-slate-900">{t('title')}</span>
         </div>
       )}
 
-      <div className={`flex flex-col lg:flex-row flex-grow overflow-hidden p-2 sm:p-4 gap-4 ${embedMode ? '' : ''}`}>
-        <div className="flex-1 flex flex-col bg-gray-800 rounded-lg shadow-xl overflow-hidden min-h-0">
-          {appMode === 'intake' && (
-            <div className="p-3 sm:p-4 space-y-3 border-b border-gray-700 shrink-0">
-              <PiiNotice />
-              <IntentPicker selected={selectedIntent} onSelect={handleSelectIntent} disabled={isLoading || submitted} />
-              {selectedIntent && (
-                <p className="text-xs text-gray-400">
-                  {t('intentSelected', { label: getIntentLabel(selectedIntent, locale) })}
-                </p>
-              )}
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <section
+          className={`mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col bg-white shadow-sm ${showHandoff ? 'overflow-y-auto' : 'overflow-hidden'}`}
+        >
+          <FallbackNotice
+            visible={apiDegraded}
+            onRetry={
+              intentStartState === 'idle' && selectedIntent
+                ? handleRetryStart
+                : lastFailedInput
+                  ? handleRetryChat
+                : undefined
+            }
+          />
+
+          {isLoading && activeRequest && (
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2 text-xs text-slate-500" role="status">
+              <span>{t('thinking')}</span>
+              <button
+                type="button"
+                onClick={handleStopRequest}
+                className="min-h-11 px-1 font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+              >
+                {t('stopRequest')}
+              </button>
             </div>
           )}
 
-          <FallbackNotice visible={apiDegraded} />
-
           <div
             ref={listRef}
-            className="flex-grow p-3 sm:p-4 space-y-1 overflow-y-auto custom-scrollbar bg-gray-900/40"
+            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-slate-100 p-3 custom-scrollbar sm:p-5"
             aria-live="polite"
             aria-relevant="additions"
+            aria-busy={isLoading}
             role="log"
           >
-            {messages.map((msg) => (
-              <ChatMessage key={msg.id} message={msg} plainText />
+            {messages.map((msg, index) => (
+              <React.Fragment key={msg.id}>
+                <ChatMessage message={msg} plainText />
+                {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState !== 'started' && (
+                  <div className="ml-10 mt-1 max-w-2xl rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+                    <IntentPicker
+                      selected={selectedIntent}
+                      onSelect={handleSelectIntent}
+                      disabled={isLoading || submitted || intentStartState === 'starting'}
+                      describedBy="cloudia-pii-note"
+                    />
+                    <div id="cloudia-pii-note" className="mt-3">
+                      <PiiNotice />
+                    </div>
+                  </div>
+                )}
+                {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState === 'started' && selectedIntent && (
+                  <p className="ml-10 mt-0.5 max-w-2xl text-xs text-slate-500" role="status">
+                    {t('intentSelected', { label: getIntentLabel(selectedIntent, locale) })}
+                  </p>
+                )}
+              </React.Fragment>
             ))}
             {isLoading && (
               <ChatMessage
@@ -289,40 +550,64 @@ const App: React.FC = () => {
             )}
           </div>
 
-          {appMode === 'intake' && readyForContact && !showHandoff && !submitted && (
-            <div className="px-4 py-2 border-t border-gray-700">
+          {readyForContact && !showHandoff && !submitted && (
+            <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-4 py-3">
+              <p className="text-xs leading-relaxed text-slate-600">{t('readyForContact')}</p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                  onClick={() => setShowHandoff(true)}
+                >
+                  {t('showHandoff')}
+                </button>
+                <button
+                  type="button"
+                  className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                  onClick={() => inputRef.current?.focus()}
+                >
+                  {t('continueChat')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showHandoff && !submitted && (
+            <HandoffForm
+              values={handoffDraft}
+              onChange={setHandoffDraft}
+              disabled={isLoading}
+              onBack={() => setShowHandoff(false)}
+              onCancel={handleStartNewConversation}
+              onSubmit={handleHandoff}
+            />
+          )}
+
+          {submitted && (
+            <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
               <button
                 type="button"
-                className="text-sm text-blue-400 underline"
-                onClick={() => setShowHandoff(true)}
+                className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                onClick={handleStartNewConversation}
               >
-                {t('showHandoff')}
+                {t('newConversation')}
               </button>
             </div>
           )}
 
-          {appMode === 'intake' && showHandoff && !submitted && (
-            <HandoffForm disabled={isLoading} onSubmit={handleHandoff} />
-          )}
-
           {!showHandoff && !submitted && (
-            <div className="p-3 sm:p-4 border-t border-gray-700 shrink-0">
+            <div className="sticky bottom-0 shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4">
               <ChatInput
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}
+                disabled={!chatReady}
+                inputRef={inputRef}
                 placeholderKey={appMode === 'intake' ? 'typeYourMessageIntake' : 'typeYourMessage'}
               />
             </div>
           )}
-        </div>
-
-        {!embedMode && (
-          <aside className="hidden lg:flex flex-none lg:w-64 xl:w-72 flex-col items-center justify-center bg-gray-800/80 rounded-lg shadow-xl p-6">
-            <ExpressionAvatar emotion={displayEmotion} size={160} />
-            <p className="mt-4 text-center text-sm text-gray-400 px-2">Cloudia</p>
-          </aside>
-        )}
-      </div>
+        </section>
+      </main>
     </div>
   );
 };

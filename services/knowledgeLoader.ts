@@ -5,10 +5,16 @@ import { extractCompanyURLs } from './urlExtractor';
 export const loadCompanyKnowledge = async (): Promise<CompanyKnowledge> => {
   console.log('🔍 loadCompanyKnowledge called!');
   try {
+    // Vite's BASE_URL is /contact/chat/ in the Pages build. Keep public data
+    // on that mount path so the edge prefix strip remains transparent.
+    const base = (import.meta as ImportMeta & { env?: { BASE_URL?: string } }).env?.BASE_URL || '/';
+    const publicUrl = (relativePath: string): string =>
+      `${base.replace(/\/?$/, '/')}${relativePath.replace(/^\/+/, '')}`;
+
     // Load company markdown file (try both locations)
-    let companyResponse = await fetch('/company.md');
+    let companyResponse = await fetch(publicUrl('company.md'));
     if (!companyResponse.ok) {
-      companyResponse = await fetch('/company-info/company.md');
+      companyResponse = await fetch(publicUrl('company-info/company.md'));
     }
     let markdownContent = '';
     

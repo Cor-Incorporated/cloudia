@@ -2,9 +2,9 @@ export const translations = {
   en: {
     title: "Cloudia — Cor. AI Reception",
     welcomeMessage:
-      "Hello. I'm Cloudia, Cor. Inc.'s AI receptionist. I'll organize your inquiry in about 5–7 questions and hand it off to our team. Please do not enter confidential information such as customer names, personal data, or contract text. First, choose the purpose of your inquiry.",
+      "Hello. I'm Cloudia, the AI receptionist for Cor. Inc. (Japanese legal name: Cor.株式会社, read as コー株式会社). I'll organize your inquiry in about 5–7 questions and hand it off to our team. Please do not enter confidential information such as customer names, personal data, or contract text. First, choose the purpose of your inquiry.",
     welcomeMessageAmbassador:
-      "Hey there! I'm Cloudia Sorano, Cor.inc's AI Ambassador! 🚀 I've got all the company info, upcoming events, and can dive into our social media for the latest tech buzz. What can I help you with today?",
+      "Hello, I'm Cloudia from Cor. Inc. This is the casual conversation mode. Please feel free to ask about our company and technology. If your topic becomes a concrete project inquiry, I can also guide you to our contact form.",
     piiNotice:
       "Do not enter confidential information during the chat (customer names, personal data, contracts, etc.). Contact details are collected only at the final submit step.",
     intentPickerLabel: "Inquiry purpose",
@@ -35,18 +35,29 @@ export const translations = {
     handoffEmail: "Email",
     handoffCompany: "Company (optional)",
     handoffMessage: "Additional notes (optional)",
+    handoffDefaultMessage: "I would like to follow up on the Cloudia conversation.",
     handoffSubmit: "Submit inquiry",
     handoffSuccess: "Thank you. Your inquiry has been submitted.",
     fallbackNotice: "Chat is temporarily unavailable. You can use the form instead:",
+    retry: "Try again",
     fallbackLink: "Open contact form",
     showHandoff: "Proceed to submit contact details",
+    readyForContact: "I have enough context to connect you with our team. You can continue chatting or enter your contact details now.",
+    continueChat: "Continue chatting",
+    backToChat: "Back to chat",
+    cancelConversation: "Cancel conversation",
+    stopRequest: "Stop",
+    newConversation: "New inquiry",
+    newConversationConfirm: "Start a new inquiry? The current conversation will be cleared.",
+    ambassadorLink: "Chat casually with Cloudia",
+    intakeLink: "Return to inquiry reception",
   },
   ja: {
     title: "Cloudia — Cor. AI受付",
     welcomeMessage:
-      "こんにちは。Cor.株式会社のAI受付 Cloudiaです。5〜7問でご相談内容を整理し、担当者へ引き継ぎます。顧客名、個人情報、契約書本文などの機密情報は入力しないでください。まず、ご相談の目的を選んでください。",
+      "こんにちは。Cor.株式会社（読み：コー株式会社、ブランド名：Cor.inc）のAI受付 Cloudiaです。5〜7問でご相談内容を整理し、担当者へ引き継ぎます。顧客名、個人情報、契約書本文などの機密情報は入力しないでください。まず、ご相談の目的を選んでください。",
     welcomeMessageAmbassador:
-      "おっす！クラウディア・ソラノっちゃん、Cor.incのAIアンバサダーやけん！🚀 会社の情報も、今度のイベントも、SNSの最新情報も全部知っとうよ〜。なんか聞きたいことあると？",
+      "こんにちは。Cor.株式会社（読み：コー株式会社、ブランド名：Cor.inc）のCloudiaです。こちらは雑談モードです。会社やAI技術についてご質問があればお聞かせください。具体的なご相談になった場合は、受付モードへご案内します。",
     piiNotice:
       "会話中に機密情報（顧客名、個人情報、契約書本文など）は入力しないでください。連絡先は最終送信時のみお伺いします。",
     intentPickerLabel: "ご相談の目的",
@@ -77,11 +88,22 @@ export const translations = {
     handoffEmail: "メールアドレス",
     handoffCompany: "会社名（任意）",
     handoffMessage: "補足（任意）",
+    handoffDefaultMessage: "Cloudiaでの相談内容について、担当からの連絡を希望します。",
     handoffSubmit: "問い合わせを送信",
     handoffSuccess: "送信しました。担当よりご連絡します。",
     fallbackNotice: "チャットが一時的に利用できません。フォームをご利用ください:",
+    retry: "もう一度試す",
     fallbackLink: "お問い合わせフォームを開く",
     showHandoff: "連絡先の入力に進む",
+    readyForContact: "ご相談内容を整理できました。連絡先を入力して引き継ぐか、このまま相談を続けられます。",
+    continueChat: "このまま相談を続ける",
+    backToChat: "チャットに戻る",
+    cancelConversation: "会話を中断する",
+    stopRequest: "停止",
+    newConversation: "新しい相談",
+    newConversationConfirm: "現在の会話を消去して、新しい相談を始めますか？",
+    ambassadorLink: "Cloudiaと雑談する",
+    intakeLink: "お問い合わせ受付へ戻る",
   },
 };
 

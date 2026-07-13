@@ -3,7 +3,11 @@ import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', ['VITE_', '']);
-    const configuredBase = env.VITE_BASE_PATH || '/';
+    // Cloudflare's contact edge serves the Pages app under /contact/chat and
+    // strips that prefix before forwarding requests to the Pages origin.
+    // Keep local dev rooted at / while making a plain production build deployable
+    // behind that edge route. VITE_BASE_PATH remains an explicit override.
+    const configuredBase = env.VITE_BASE_PATH || (mode === 'production' ? '/contact/chat/' : '/');
     const base = configuredBase.endsWith('/') ? configuredBase : `${configuredBase}/`;
     const robots = env.VITE_ROBOTS || 'index,follow';
     return {

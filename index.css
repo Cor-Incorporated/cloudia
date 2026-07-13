@@ -13,27 +13,25 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #2d3748; /* gray-800 */
+  background: #e2e8f0;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #4a5568; /* gray-600 */
+  background: #94a3b8;
   border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #718096; /* gray-500 */
+  background: #64748b;
 }
 
-#app-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000; /* Ensure header is above other content */
-}
-
-/* Add padding to the body to prevent content from being obscured by the fixed header */
-body > #root > div {
-    padding-top: 60px; /* Adjust based on header height */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

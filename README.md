@@ -1,6 +1,6 @@
 # 3D Emotional Chat AI
 
-An innovative React TypeScript application that creates an immersive 3D emotional chat AI experience using Google's Gemini API, featuring a 3D VRM character that displays emotions while providing company-specific answers.
+A React TypeScript contact-reception experience with an eight-expression Cloudia avatar. Conversations run through corsweb's server-side contact gateway; the browser never receives an AI provider credential.
 
 ## ✨ Features
 
@@ -10,9 +10,8 @@ An innovative React TypeScript application that creates an immersive 3D emotiona
 - **Real-time Animation**: Smooth transitions between emotional states during conversations
 
 ### 🤖 AI-Powered Conversations
-- **Gemini Integration**: Powered by Google's Gemini API for intelligent responses
-- **Company Knowledge Base**: Integrated with company information and real-time calendar data
-- **Web Search Capability**: Enhanced with web search functionality via Washington proxy for global accessibility
+- **Server-side AI**: Both intake and ambassador modes use `/api/contact/chat`
+- **Company Knowledge Base**: Company context and system instructions are assembled by the Worker
 - **Emotion Detection**: AI automatically determines appropriate emotions for responses
 
 ### 📅 Calendar Integration
@@ -31,20 +30,20 @@ An innovative React TypeScript application that creates an immersive 3D emotiona
 ### Modern Tech Stack
 - **Frontend**: React 18 with TypeScript and Vite
 - **3D Graphics**: Three.js with VRM model support
-- **AI Integration**: Google Gemini API with streaming responses
+- **AI Integration**: Vertex Gemini behind the corsweb contact-chat Worker
 - **Styling**: Tailwind CSS for responsive design
 - **State Management**: React Context for language and app state
 
 ### Innovative Design Decisions
 - **ES Modules with Import Maps**: Native ES modules loaded from esm.sh CDN instead of bundling
 - **Ref-based 3D Updates**: Character expression updates bypass React re-renders for performance
-- **Proxy Architecture**: Washington-based proxy server for global web search access
+- **Gateway Architecture**: Same-origin contact API with no browser-side AI credentials
 - **Character Encoding**: Advanced UTF-8 handling for Japanese calendar integration
 
 ## 📋 Prerequisites
 
 - **Node.js** (v18 or higher)
-- **Gemini API Key** from Google AI Studio
+- Access to a running corsweb contact-chat Worker
 - **Google Calendar** with public iCal URL (optional)
 
 ## 🛠 Setup & Installation
@@ -58,14 +57,11 @@ npm install
 Create a `.env.local` file with the following variables:
 
 ```env
-GEMINI_API_KEY=your_actual_gemini_api_key
+VITE_CONTACT_API_BASE=https://your-contact-worker.example.com
 GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 ```
 
-**Getting Your API Key:**
-1. Visit [Google AI Studio](https://aistudio.google.com/)
-2. Create a new API key
-3. Copy the key to your `.env.local` file
+No Gemini or Vertex credential belongs in `.env.local`. Local Cloudia development calls the configured contact-chat Worker, or uses `VITE_CONTACT_CHAT_MOCK=1` for UI-only work.
 
 **Calendar Setup (Optional):**
 1. Open Google Calendar
@@ -74,7 +70,7 @@ GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 4. Copy the public iCal URL
 
 ### 3. Company Configuration
-Edit `/company-info/company.md` with your company details in Markdown format. This content will be used by the AI for company-specific responses.
+Company knowledge used by the model is configured server-side in corsweb. The Markdown files in this repository are retained as reference content and are not sent directly from the browser.
 
 ### 4. Run Development Server
 ```bash
@@ -84,6 +80,15 @@ npm run dev
 ### 5. Build for Production
 ```bash
 npm run build
+```
+
+The production build is mounted at `/contact/chat/`, so its CSS, JavaScript,
+favicon, and public assets are emitted with that prefix. Local development
+keeps the root (`/`) base path. Deploy the production artifact to the Pages
+`main` branch so the `cor-jp.com` edge route receives it:
+
+```bash
+npx wrangler pages deploy dist --project-name cloudia-contact --branch main
 ```
 
 ### 6. Preview Production Build
@@ -101,15 +106,14 @@ src/
 │   ├── ChatMessage.tsx         # Message display component
 │   └── KnowledgeInput.tsx      # Knowledge base editor
 ├── services/            # Core services
-│   ├── geminiService.ts        # Gemini API integration
+│   ├── contactChatClient.ts    # Server-side chat gateway client
 │   ├── (avatar images under public/assets/avatar/)
 │   ├── calendarService.ts      # Calendar integration
 │   ├── companyWebSearch.ts     # Web search functionality
 │   └── knowledgeLoader.ts      # Company knowledge loader
 ├── contexts/            # React contexts
 │   └── LanguageContext.tsx     # Language management
-├── api/                 # Netlify Functions
-│   ├── gemini.ts               # Gemini API proxy
+├── api/                 # Legacy calendar endpoint only
 │   └── calendar.ts             # Calendar API proxy
 └── company-info/        # Company knowledge base
     └── company.md              # Company information in Markdown
@@ -121,7 +125,6 @@ src/
 2. **Watch Emotions**: Observe how the 3D character's expression changes based on responses
 3. **Language Toggle**: Switch between Japanese and English using the language selector
 4. **Company Queries**: Ask about company information, events, or schedules
-5. **Web Search**: Ask questions that trigger web searches for current information
 
 ## 🔧 Technical Details
 
@@ -131,26 +134,18 @@ src/
 - **Performance Optimization**: Direct bone manipulation without React re-renders
 
 ### AI Integration
-- **Streaming Responses**: Real-time response streaming from Gemini
-- **Context Management**: Maintains conversation history and company knowledge
-- **Emotion Parsing**: Extracts emotion indicators from AI responses
+- **Contact Gateway**: Sends bounded conversation history plus mode, locale, and intent
+- **Context Management**: Company knowledge and provider prompts stay on the server
+- **Safe Errors**: Provider and infrastructure details are not rendered to users
 
 ### Calendar Integration
 - **iCal Parsing**: Custom parser for Google Calendar iCal format
 - **Encoding Handling**: Advanced UTF-8 support for Japanese content
 - **Date Filtering**: Smart filtering for relevant upcoming events
 
-### Web Search Proxy
-- **Global Access**: Washington-based proxy for international search access
-- **CORS Handling**: Seamless integration with client-side application
-- **Search Integration**: Automatic web search triggered by specific keywords
-
 ## 🌍 Deployment
 
-The application is configured for deployment on Netlify with:
-- **Netlify Functions**: Server-side API proxies for Gemini and Calendar
-- **Edge Network**: Global CDN distribution
-- **Environment Variables**: Secure API key management
+The production contact experience is mounted on corsweb and calls the same-origin `/api/contact/*` Worker routes. `netlify.toml` remains only for the legacy calendar preview path; there is no Netlify AI function.
 
 ## 🤝 Contributing
 
@@ -190,4 +185,3 @@ For issues or questions:
   - `VITE_FALLBACK_CONTACT_URL` — default `https://cor-jp.com/contact/`
 - **Embed**: open with `?embed=1` for compact header (iframe /corsweb #254)
 - **LINE UI**: left Cloudia avatar + bubble, right user bubble; plain-text replies
-
