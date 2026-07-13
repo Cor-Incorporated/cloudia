@@ -101,7 +101,7 @@ const getMockCalendarData = (): string => {
 *Note: This is mock data for development. In production, real calendar events will be displayed.`;
 };
 
-export const fetchCalendarData = async (icalUrl: string): Promise<string> => {
+export const fetchCalendarData = async (_icalUrl: string): Promise<string> => {
   // In development mode, return mock data to avoid CORS issues
   if (isDevelopment()) {
     return getMockCalendarData();
