@@ -35,35 +35,23 @@ export interface GriftHandoffBrowser extends GriftMessageTarget {
 export type GriftHandoffAction = 'navigated' | 'messaged' | 'blocked';
 
 /**
- * Build an exact HTTPS origin allowlist. Production is always present; a
- * Preview/Staging build may append explicit origins through its public Vite
- * build variable. Invalid entries and wildcard-like values are ignored.
+ * Build an exact HTTPS origin allowlist from the environment-specific value
+ * emitted by Vite. Production and Preview are intentionally disjoint at build
+ * time; this runtime boundary never adds an implicit origin. A polluted list
+ * rejects the whole value so a partially valid configuration cannot widen the
+ * navigation or postMessage boundary.
  */
 export function resolveAllowedGriftPublicOrigins(
   configuredOrigins: unknown = CONFIGURED_GRIFT_PUBLIC_URL_ORIGINS,
 ): ReadonlySet<string> {
-  const origins = new Set<string>([GRIFT_PRODUCTION_PUBLIC_ORIGIN]);
-  if (typeof configuredOrigins !== 'string') return origins;
+  const origins = new Set<string>();
+  if (typeof configuredOrigins !== 'string' || !configuredOrigins) return origins;
 
   for (const rawOrigin of configuredOrigins.split(',')) {
     const candidate = rawOrigin.trim();
-    if (!candidate || candidate.includes('*')) continue;
-    try {
-      const url = new URL(candidate);
-      if (
-        url.protocol !== 'https:'
-        || url.username
-        || url.password
-        || url.port
-        || url.pathname !== '/'
-        || url.search
-        || url.hash
-        || candidate !== url.origin
-      ) continue;
-      origins.add(url.origin);
-    } catch {
-      // Fail closed: malformed configured entries never widen the allowlist.
-    }
+    const origin = parseCanonicalExactHttpsOrigin(candidate);
+    if (!origin) return new Set<string>();
+    origins.add(origin);
   }
   return origins;
 }

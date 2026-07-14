@@ -11,6 +11,10 @@ const PREVIEW_ORIGIN_CONFIGURED = (process.env.VITE_GRIFT_PUBLIC_URL_ORIGINS || 
   .split(',')
   .map((origin) => origin.trim())
   .includes(PREVIEW_PORTAL_ORIGIN);
+const ACTIVE_PORTAL_ORIGIN = PREVIEW_ORIGIN_CONFIGURED
+  ? PREVIEW_PORTAL_ORIGIN
+  : 'https://app.griftai.org';
+const ACTIVE_PORTAL_URL = PREVIEW_ORIGIN_CONFIGURED ? PREVIEW_PORTAL_URL : PORTAL_URL;
 const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 const TURNSTILE_ENABLED = Boolean(process.env.VITE_TURNSTILE_SITE_KEY?.trim());
 const FAKE_TURNSTILE_API = String.raw`
@@ -174,10 +178,10 @@ test.describe('eligible Cloudia to Grift handoff', () => {
           ok: true,
           receiptId: `receipt-${handoffCase.intent}`,
           status: 'queued',
-          handoff: { status: 'ready', url: PORTAL_URL, expiresAt },
+          handoff: { status: 'ready', url: ACTIVE_PORTAL_URL, expiresAt },
         }, 202);
       });
-      await page.route('https://app.griftai.org/**', async (route) => {
+      await page.route(`${ACTIVE_PORTAL_ORIGIN}/**`, async (route) => {
         await route.fulfill({ contentType: 'text/html', body: '<title>Grift portal E2E</title>' });
       });
 
@@ -193,7 +197,7 @@ test.describe('eligible Cloudia to Grift handoff', () => {
       await fillHandoffForm(page);
       await expect(submitButton).toBeEnabled();
       await Promise.all([
-        page.waitForURL(PORTAL_URL),
+        page.waitForURL(ACTIVE_PORTAL_URL),
         submitButton.click(),
       ]);
 
@@ -237,7 +241,7 @@ test.describe('eligible Cloudia to Grift handoff', () => {
         await fulfillJson(route, {
           ok: true,
           status: 'queued',
-          handoff: { status: 'ready', url: PORTAL_URL, expiresAt },
+          handoff: { status: 'ready', url: ACTIVE_PORTAL_URL, expiresAt },
         });
       });
 
@@ -256,7 +260,7 @@ test.describe('eligible Cloudia to Grift handoff', () => {
       expect(messages).toEqual([{
         data: {
           type: 'cloudia:grift-handoff-ready',
-          url: PORTAL_URL,
+          url: ACTIVE_PORTAL_URL,
           expiresAt,
         },
         origin: BASE_URL,
@@ -349,11 +353,17 @@ test.describe('portal URL and expiry security', () => {
       url: `https://evil.example/chat/portal#exchange_code=${EXCHANGE_CODE}`,
       expiresAt: () => futureExpiry(),
     },
-    ...(!PREVIEW_ORIGIN_CONFIGURED ? [{
-      name: 'unconfigured Preview origin',
-      url: PREVIEW_PORTAL_URL,
-      expiresAt: () => futureExpiry(),
-    }] : []),
+    ...(PREVIEW_ORIGIN_CONFIGURED
+      ? [{
+          name: 'production origin excluded from Preview',
+          url: PORTAL_URL,
+          expiresAt: () => futureExpiry(),
+        }]
+      : [{
+          name: 'unconfigured Preview origin',
+          url: PREVIEW_PORTAL_URL,
+          expiresAt: () => futureExpiry(),
+        }]),
     {
       name: 'HTTP scheme',
       url: `http://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`,
@@ -516,10 +526,12 @@ test.describe('portal URL and expiry security', () => {
           },
         });
       });
-      await page.route('https://app.griftai.org/**', async (route) => {
+      const rejectNavigation = async (route: Route) => {
         portalRequests += 1;
         await route.fulfill({ contentType: 'text/html', body: '<title>Must not navigate</title>' });
-      });
+      };
+      await page.route('https://app.griftai.org/**', rejectNavigation);
+      await page.route(`${PREVIEW_PORTAL_ORIGIN}/**`, rejectNavigation);
 
       await page.goto('/?intent=contract-dev&source=security-matrix&locale=en');
       const originalUrl = page.url();
@@ -547,7 +559,7 @@ test.describe('portal URL and expiry security', () => {
       await fulfillJson(route, {
         ok: true,
         status: 'queued',
-        handoff: { status: 'ready', url: PORTAL_URL, expiresAt: futureExpiry() },
+        handoff: { status: 'ready', url: ACTIVE_PORTAL_URL, expiresAt: futureExpiry() },
       });
     });
 

@@ -98,18 +98,62 @@ describe('Cloudia embed parent origin build boundary', () => {
 });
 
 describe('Grift public origin build boundary', () => {
-  it('drops Preview origins from production even when the build environment carries them', () => {
+  const productionOrigin = 'https://app.griftai.org';
+  const previewOrigin = 'https://grift-preview.example.run.app';
+
+  it('pins production to the production origin even when CI carries a Preview variable', () => {
     expect(resolveGriftPublicUrlOriginsForBuild(
       'production',
-      'https://grift-preview.example.run.app',
-    )).toBe('');
+      previewOrigin,
+    )).toBe(productionOrigin);
   });
 
-  it('preserves explicitly configured origins only for a non-production build mode', () => {
+  it('preserves only explicitly configured canonical origins in Preview', () => {
     expect(resolveGriftPublicUrlOriginsForBuild(
       'preview',
-      'https://grift-preview.example.run.app',
-    )).toBe('https://grift-preview.example.run.app');
+      `${previewOrigin}, https://grift-staging.example.run.app,${previewOrigin}`,
+    )).toBe(`${previewOrigin},https://grift-staging.example.run.app`);
+  });
+
+  it.each([
+    undefined,
+    '',
+    `${previewOrigin},`,
+    `,${previewOrigin}`,
+    `${previewOrigin},https://*.example.run.app`,
+    `${previewOrigin},https://user:password@example.run.app`,
+    `${previewOrigin},https://example.run.app/`,
+    `${previewOrigin},https://example.run.app/path`,
+    `${previewOrigin},https://example.run.app?preview=1`,
+    `${previewOrigin},https://example.run.app#preview`,
+    `${previewOrigin},https://example.run.app:443`,
+    `${previewOrigin},http://example.run.app`,
+    `${previewOrigin},HTTPS://example.run.app`,
+    `${previewOrigin},https://EXAMPLE.run.app`,
+    `${previewOrigin},https://example%2Erun.app`,
+    `${previewOrigin},https://example.run.app.`,
+    productionOrigin,
+    `${previewOrigin},${productionOrigin}`,
+  ])('fails the whole Preview build for missing, polluted, or production config: %s', (configured) => {
+    expect(() => resolveGriftPublicUrlOriginsForBuild('preview', configured)).toThrow(
+      'Invalid or missing public Preview build variable: VITE_GRIFT_PUBLIC_URL_ORIGINS',
+    );
+  });
+
+  it('does not echo a rejected Grift origin into retained build logs', () => {
+    const rejected = 'https://preview.example.run.app/path-with-sensitive-marker';
+    expect(() => resolveGriftPublicUrlOriginsForBuild('preview', rejected)).toThrowError(
+      expect.not.stringContaining(rejected),
+    );
+  });
+
+  it('keeps the development default and supports an explicit isolated Preview origin', () => {
+    expect(resolveGriftPublicUrlOriginsForBuild('development', undefined)).toBe(productionOrigin);
+    expect(resolveGriftPublicUrlOriginsForBuild('development', previewOrigin)).toBe(previewOrigin);
+    expect(resolveGriftPublicUrlOriginsForBuild(
+      'development',
+      `${previewOrigin},https://example.run.app/path`,
+    )).toBe('');
   });
 });
 

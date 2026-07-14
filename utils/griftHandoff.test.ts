@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   GRIFT_MAX_PORTAL_TTL_MS,
+  GRIFT_PRODUCTION_PUBLIC_ORIGIN,
   openGriftHandoff,
   parseAllowedGriftHandoffUrl,
   parseValidGriftHandoffExpiry,
@@ -90,34 +91,47 @@ describe('Grift handoff navigation', () => {
     }
   });
 
-  it('adds only explicitly configured exact HTTPS Preview origins', () => {
+  it('uses only explicitly configured exact HTTPS Preview origins', () => {
     const configured = [
       PREVIEW_ORIGIN,
       'https://grift-staging.example.run.app',
-      'https://*.example.run.app',
-      'http://insecure.example.run.app',
-      'https://user:password@example.run.app',
-      'https://example.run.app:443',
-      'https://example.run.app:444',
-      'https://example.run.app/path',
-      'not-a-url',
+      PREVIEW_ORIGIN,
     ].join(',');
     const origins = resolveAllowedGriftPublicOrigins(configured);
 
     expect([...origins]).toEqual([
-      'https://app.griftai.org',
       PREVIEW_ORIGIN,
       'https://grift-staging.example.run.app',
     ]);
     expect(parseAllowedGriftHandoffUrl(PREVIEW_PORTAL_URL, configured)).toBe(PREVIEW_PORTAL_URL);
+    expect(parseAllowedGriftHandoffUrl(PORTAL_URL, configured)).toBeNull();
     expect(parseAllowedGriftHandoffUrl(
       `https://unlisted.example.run.app/chat/portal#exchange_code=${EXCHANGE_CODE}`,
       configured,
     )).toBeNull();
   });
 
-  it('keeps the production default limited to the production origin', () => {
-    expect([...resolveAllowedGriftPublicOrigins('')]).toEqual(['https://app.griftai.org']);
+  it.each([
+    '',
+    `${PREVIEW_ORIGIN},`,
+    `,${PREVIEW_ORIGIN}`,
+    `${PREVIEW_ORIGIN},https://*.example.run.app`,
+    `${PREVIEW_ORIGIN},http://insecure.example.run.app`,
+    `${PREVIEW_ORIGIN},https://user:password@example.run.app`,
+    `${PREVIEW_ORIGIN},https://example.run.app:443`,
+    `${PREVIEW_ORIGIN},https://example.run.app:444`,
+    `${PREVIEW_ORIGIN},https://example.run.app/path`,
+    `${PREVIEW_ORIGIN},not-a-url`,
+  ])('fails the whole runtime allowlist closed for empty or polluted config: %s', (configured) => {
+    expect(resolveAllowedGriftPublicOrigins(configured)).toEqual(new Set());
+    expect(parseAllowedGriftHandoffUrl(PREVIEW_PORTAL_URL, configured)).toBeNull();
+  });
+
+  it('uses the build-provided production origin without an implicit runtime fallback', () => {
+    expect([...resolveAllowedGriftPublicOrigins()]).toEqual([GRIFT_PRODUCTION_PUBLIC_ORIGIN]);
+    expect([...resolveAllowedGriftPublicOrigins(GRIFT_PRODUCTION_PUBLIC_ORIGIN)])
+      .toEqual([GRIFT_PRODUCTION_PUBLIC_ORIGIN]);
+    expect(resolveAllowedGriftPublicOrigins('')).toEqual(new Set());
     expect(parseAllowedGriftHandoffUrl(PREVIEW_PORTAL_URL, '')).toBeNull();
   });
 
@@ -181,7 +195,7 @@ describe('Grift handoff navigation', () => {
       true,
       browser,
       expiresAt,
-      '',
+      GRIFT_PRODUCTION_PUBLIC_ORIGIN,
       FIREBASE_PREVIEW_PARENT_ORIGIN,
     )).toBe('messaged');
     expect(browser.parent.postMessage).toHaveBeenCalledWith({

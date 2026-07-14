@@ -7,7 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_FALLBACK_CONTACT_URL?: string;
   /** Exact comma-separated HTTPS parent origins for Preview/Staging embeds only. */
   readonly VITE_CLOUDIA_EMBED_PARENT_ORIGINS?: string;
-  /** Exact comma-separated HTTPS Grift origins for Preview/Staging builds only. */
+  /** Required exact comma-separated HTTPS Grift origins for Preview/Staging builds only. */
   readonly VITE_GRIFT_PUBLIC_URL_ORIGINS?: string;
   readonly VITE_TURNSTILE_SITE_KEY?: string;
 }

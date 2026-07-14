@@ -80,17 +80,20 @@ Turnstile and preserves the existing form behavior. A Turnstile sitekey is a
 public browser identifier, not a secret. Never put `TURNSTILE_SECRET` (or any
 other server credential) in a `VITE_*` variable.
 
-`VITE_GRIFT_PUBLIC_URL_ORIGINS` is an optional, public build-time allowlist for
+`VITE_GRIFT_PUBLIC_URL_ORIGINS` is a required public build-time allowlist for
 the temporary Grift Preview/Staging portal. Vite production mode ignores this
-variable even when it remains set in the build environment. The production origin
-`https://app.griftai.org` is always allowed and is the only allowed origin when
-this variable is omitted. Set the variable only on the Cloudia Preview build and
-use `npm run build:preview` (Vite `preview` mode) for that artifact. Use the normal
-`npm run build` for production. Set the allowlist to
-the exact tagged Grift origin returned by the staging release (comma-separated
-when more than one exact origin is required). Entries must be HTTPS origins
-with no path, query, fragment, credentials, port alias, or wildcard. The
-production Cloudia build must leave it unset. Both top-level navigation and the
+variable even when it remains set in the build environment and emits only
+`https://app.griftai.org`. A Preview build emits only the explicitly configured
+Preview origins: a missing, empty, malformed, production-only, or production-mixed
+value fails the build. Set the variable only on the Cloudia Preview build and use
+`npm run build:preview` (Vite `preview` mode) for that artifact. Use the normal
+`npm run build` for production. Set the allowlist to the exact tagged Grift origin
+returned by the staging release (comma-separated when more than one exact origin
+is required). Entries must be canonical HTTPS origins with no path, query,
+fragment, credentials, port alias, wildcard, case normalization, or alternate
+encoding. Local development keeps the production origin when the variable is
+omitted, while an explicit local value can exercise the isolated Preview portal.
+Both top-level navigation and the
 portal URL sent to the trusted Cor. iframe parent use this same allowlist and
 the exact `/chat/portal#exchange_code=<43-character base64url code>` contract.
 The code is a no-padding encoding of 32 random bytes and expires no more than

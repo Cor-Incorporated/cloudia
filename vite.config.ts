@@ -10,6 +10,9 @@ const PRODUCTION_EMBED_PARENT_ORIGINS = [
   'https://cor-jp.com',
   'https://www.cor-jp.com',
 ] as const;
+const GRIFT_PRODUCTION_PUBLIC_ORIGIN = 'https://app.griftai.org';
+const INVALID_GRIFT_PREVIEW_ORIGINS_ERROR =
+  'Invalid or missing public Preview build variable: VITE_GRIFT_PUBLIC_URL_ORIGINS';
 
 export interface PreviewReleaseMetadata {
   status: 'ok';
@@ -116,7 +119,35 @@ export function resolveGriftPublicUrlOriginsForBuild(
   mode: string,
   configuredOrigins: string | undefined,
 ): string {
-  return mode === 'production' ? '' : configuredOrigins || '';
+  // Production is immutable even when a stale Preview variable is inherited.
+  if (mode === 'production') return GRIFT_PRODUCTION_PUBLIC_ORIGIN;
+
+  // Local development keeps the existing production handoff default. Supplying
+  // an explicit exact-origin list lets Chromium exercise an isolated Preview
+  // portal without changing the loopback parent-frame exception.
+  const localDevelopment = mode === 'development' || mode === 'test';
+  if (!configuredOrigins) {
+    if (localDevelopment) return GRIFT_PRODUCTION_PUBLIC_ORIGIN;
+    throw new Error(INVALID_GRIFT_PREVIEW_ORIGINS_ERROR);
+  }
+
+  const origins = new Set<string>();
+  for (const rawOrigin of configuredOrigins.split(',')) {
+    const origin = parseCanonicalExactHttpsOrigin(rawOrigin.trim());
+    if (!origin) {
+      if (localDevelopment) return '';
+      throw new Error(INVALID_GRIFT_PREVIEW_ORIGINS_ERROR);
+    }
+    origins.add(origin);
+  }
+
+  // Preview/Staging artifacts must never admit the production portal. Treat a
+  // production-only or mixed list as a configuration error rather than silently
+  // generating an artifact whose effective policy differs from its input.
+  if (!localDevelopment && origins.has(GRIFT_PRODUCTION_PUBLIC_ORIGIN)) {
+    throw new Error(INVALID_GRIFT_PREVIEW_ORIGINS_ERROR);
+  }
+  return [...origins].join(',');
 }
 
 export function resolveCloudiaEmbedParentOriginsForBuild(
