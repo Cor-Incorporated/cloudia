@@ -25,6 +25,9 @@ export enum Emotion {
 /** intake = Contact 本線（敬語）。ambassador = SNS/デモ（方言可） */
 export type AppMode = 'intake' | 'ambassador';
 
+/** Browser-only state for the optional Turnstile challenge. Tokens are never persisted. */
+export type TurnstileStatus = 'loading' | 'ready' | 'verified' | 'expired' | 'error' | 'timeout';
+
 /**
  * corsweb ADR-0014 正本 intent 7 キー。Grift handoff eligibility は
  * constants/intents.ts に集約し、元の intent は Worker まで保持する。

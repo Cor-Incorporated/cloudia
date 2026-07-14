@@ -108,6 +108,12 @@ function normalizeConfirmedSummaryText(value: unknown): string {
   return value;
 }
 
+function normalizeTurnstileToken(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const token = value.trim();
+  return token && token.length <= 2048 ? token : undefined;
+}
+
 function normalizeConversationSummaryForSubmit(
   value: unknown,
   locale: Locale,
@@ -415,6 +421,7 @@ export async function postContactSubmit(
   );
   const hasConfirmedSummary = typeof summaryText !== 'string';
   const consent = normalizeGriftHandoffConsent(intent, payload.handoffConsent, hasConfirmedSummary);
+  const turnstileToken = normalizeTurnstileToken(payload.turnstileToken);
   // Worker 未対応の intent でも届くよう summary / message 先頭にも intent を埋め込む
   const intentTag = intent ? `[intent:${intent}] ` : '';
   const body = {
@@ -434,7 +441,7 @@ export async function postContactSubmit(
     locale,
     source,
     ...(consent ? { handoffConsent: consent } : {}),
-    turnstileToken: payload.turnstileToken,
+    ...(turnstileToken ? { turnstileToken } : {}),
     website: payload.website ?? '',
   };
 

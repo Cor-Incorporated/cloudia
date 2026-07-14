@@ -4,6 +4,59 @@ import { expect, test, type FrameLocator, type Page, type Route } from '@playwri
 const BASE_URL = 'http://127.0.0.1:4173';
 const PARENT_URL = `${BASE_URL}/e2e/embed-parent.html`;
 const PORTAL_URL = 'https://app.griftai.org/chat/portal/opaque-token_123.~';
+const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+const TURNSTILE_ENABLED = Boolean(process.env.VITE_TURNSTILE_SITE_KEY?.trim());
+const FAKE_TURNSTILE_API = String.raw`
+  (() => {
+    const widgets = new Map();
+    const manual = new URL(window.location.href).searchParams.has('turnstileManual');
+    let sequence = 0;
+    const latest = () => Array.from(widgets.values()).at(-1);
+    const complete = (token = 'turnstile-e2e-token') => {
+      const widget = latest();
+      if (widget) widget.options.callback(token);
+    };
+    const state = {
+      renderCount: 0,
+      resetCount: 0,
+      removeCount: 0,
+      sizes: [],
+      complete,
+      expire: () => latest()?.options['expired-callback'](),
+      fail: () => latest()?.options['error-callback'](),
+      timeout: () => latest()?.options['timeout-callback'](),
+    };
+    Object.defineProperty(window, '__turnstileTest', { value: state, configurable: true });
+    window.turnstile = {
+      ready(callback) { callback(); },
+      render(container, options) {
+        const id = 'cloudia-turnstile-' + (++sequence);
+        const marker = document.createElement('div');
+        marker.setAttribute('role', 'group');
+        marker.setAttribute('aria-label', 'Turnstile test widget');
+        marker.textContent = 'Turnstile test widget';
+        container.replaceChildren(marker);
+        widgets.set(id, { container, options });
+        state.renderCount += 1;
+        state.sizes.push(options.size);
+        if (!manual) window.setTimeout(() => complete('turnstile-e2e-token-' + sequence), 0);
+        return id;
+      },
+      reset(id) {
+        if (!widgets.has(id)) return;
+        state.resetCount += 1;
+        if (!manual) window.setTimeout(() => complete('turnstile-e2e-reset-token-' + state.resetCount), 0);
+      },
+      remove(id) {
+        const widget = widgets.get(id);
+        if (!widget) return;
+        widget.container.replaceChildren();
+        widgets.delete(id);
+        state.removeCount += 1;
+      },
+    };
+  })();
+`;
 const ELIGIBLE_CASES = [
   { intent: 'contract-dev', source: 'header-ai-dev', locale: 'ja' },
   { intent: 'grift-team-beta', source: 'grift-lp-hero', locale: 'en' },
@@ -13,6 +66,16 @@ const ELIGIBLE_CASES = [
 
 type Scope = Page | FrameLocator;
 type JsonObject = Record<string, unknown>;
+
+test.beforeEach(async ({ page }) => {
+  if (!TURNSTILE_ENABLED) return;
+  await page.route(TURNSTILE_SCRIPT_URL, async (route) => {
+    await route.fulfill({
+      contentType: 'application/javascript; charset=utf-8',
+      body: FAKE_TURNSTILE_API,
+    });
+  });
+});
 
 function futureExpiry(offsetMs = 60 * 60 * 1000): string {
   return new Date(Date.now() + offsetMs).toISOString();
@@ -578,5 +641,175 @@ test.describe('accessibility and responsive behavior', () => {
     expect(formDimensions.scrollWidth).toBe(formDimensions.clientWidth);
     expect(formDimensions.left).toBeGreaterThanOrEqual(0);
     expect(formDimensions.right).toBeLessThanOrEqual(390);
+  });
+});
+
+test.describe('optional Turnstile boundary', () => {
+  test('keeps the existing form compatible when no sitekey is configured', async ({ page }) => {
+    test.skip(TURNSTILE_ENABLED, 'This case exercises the intentionally unconfigured path.');
+    await installReadyStart(page);
+    await page.goto('/?intent=contract-dev&source=no-turnstile-key&locale=en');
+    await openHandoffForm(page);
+    await fillHandoffForm(page);
+
+    await expect(page.locator('.cloudia-turnstile')).toHaveCount(0);
+    await expect(page.locator(`script[src^="${TURNSTILE_SCRIPT_URL.split('?')[0]}"]`)).toHaveCount(0);
+    await expect(page.locator('button[type="submit"]')).toBeEnabled();
+  });
+
+  test.describe('when VITE_TURNSTILE_SITE_KEY is configured', () => {
+    test.skip(!TURNSTILE_ENABLED, 'Run with VITE_TURNSTILE_SITE_KEY to exercise the configured path.');
+
+    test('gates submit, sends only turnstileToken, and leaves no browser leak', async ({ page }) => {
+      const submitRequests: JsonObject[] = [];
+      const browserMessages: string[] = [];
+      page.on('console', (message) => browserMessages.push(message.text()));
+      await installReadyStart(page);
+      await page.route('**/api/contact/submit', async (route) => {
+        submitRequests.push(readJsonRequest(route));
+        await fulfillJson(route, { ok: true, status: 'queued' });
+      });
+
+      await page.goto('/?intent=contract-dev&source=turnstile-e2e&locale=en&turnstileManual=1');
+      await openHandoffForm(page);
+      await fillHandoffForm(page, false);
+      const submitButton = page.locator('button[type="submit"]');
+
+      await expect(page.locator('[data-turnstile-status="ready"]')).toBeVisible();
+      await expect(submitButton).toBeDisabled();
+      await page.evaluate(() => {
+        (window as typeof window & {
+          __turnstileTest: { complete: (token: string) => void };
+        }).__turnstileTest.complete('ephemeral-e2e-turnstile-token');
+      });
+      await expect(page.locator('[data-turnstile-status="verified"]')).toBeVisible();
+      await expect(submitButton).toBeEnabled();
+      await submitButton.click();
+      await expect(page.getByText('Thank you. Your inquiry has been submitted.')).toBeVisible();
+
+      expect(submitRequests).toHaveLength(1);
+      expect(submitRequests[0].turnstileToken).toBe('ephemeral-e2e-turnstile-token');
+      expect(JSON.stringify(submitRequests[0].summaryText)).not.toContain('ephemeral-e2e-turnstile-token');
+      expect(String(submitRequests[0].message)).not.toContain('ephemeral-e2e-turnstile-token');
+      const leaks = await page.evaluate((token) => ({
+        url: window.location.href.includes(token),
+        markup: document.documentElement.innerHTML.includes(token),
+        localStorage: Object.values(window.localStorage).some((value) => value.includes(token)),
+        sessionStorage: Object.values(window.sessionStorage).some((value) => value.includes(token)),
+      }), 'ephemeral-e2e-turnstile-token');
+      expect(leaks).toEqual({ url: false, markup: false, localStorage: false, sessionStorage: false });
+      expect(browserMessages.join('\n')).not.toContain('ephemeral-e2e-turnstile-token');
+    });
+
+    test('clears and resets on summary edits, lifecycle callbacks, and unmount', async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 720 });
+      await installReadyStart(page);
+      await page.goto('/?intent=contract-dev&source=turnstile-reset&locale=en&turnstileManual=1');
+      await openHandoffForm(page);
+      await fillHandoffForm(page);
+      const submitButton = page.locator('button[type="submit"]');
+      const mobileState = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        sizes: (window as typeof window & {
+          __turnstileTest: { sizes: string[] };
+        }).__turnstileTest.sizes,
+      }));
+      expect(mobileState.scrollWidth).toBe(mobileState.clientWidth);
+      expect(mobileState.sizes).toEqual(['compact']);
+      const complete = async (token: string) => page.evaluate((value) => {
+        (window as typeof window & {
+          __turnstileTest: { complete: (nextToken: string) => void };
+        }).__turnstileTest.complete(value);
+      }, token);
+      const invoke = async (event: 'expire' | 'fail' | 'timeout') => page.evaluate((name) => {
+        const state = (window as typeof window & {
+          __turnstileTest: {
+            expire: () => void;
+            fail: () => void;
+            timeout: () => void;
+          };
+        }).__turnstileTest;
+        state[name]();
+      }, event);
+
+      await complete('summary-edit-token');
+      await expect(submitButton).toBeEnabled();
+      await page.locator('textarea[name="summaryText"]').fill('Edited summary requiring a fresh security check.');
+      await expect(page.locator('input[name="summaryConfirmed"]')).not.toBeChecked();
+      await expect(submitButton).toBeDisabled();
+      await expect.poll(() => page.evaluate(() => (
+        (window as typeof window & { __turnstileTest: { resetCount: number } }).__turnstileTest.resetCount
+      ))).toBe(1);
+
+      await page.locator('input[name="summaryConfirmed"]').check();
+      await page.locator('input[name="griftHandoffConsent"]').check();
+      await complete('expiry-token');
+      await expect(submitButton).toBeEnabled();
+      await invoke('expire');
+      await expect(page.locator('[data-turnstile-status="expired"]')).toBeVisible();
+      await expect(submitButton).toBeDisabled();
+
+      await complete('timeout-token');
+      await invoke('timeout');
+      await expect(page.locator('[data-turnstile-status="timeout"]')).toBeVisible();
+      await expect(submitButton).toBeDisabled();
+
+      await complete('error-token');
+      await invoke('fail');
+      await expect(page.locator('[data-turnstile-status="error"]')).toBeVisible();
+      await expect(submitButton).toBeDisabled();
+
+      await page.getByRole('button', { name: 'Back to chat' }).click();
+      await expect(page.locator('.cloudia-turnstile')).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => (
+        (window as typeof window & { __turnstileTest: { removeCount: number } }).__turnstileTest.removeCount
+      ))).toBe(1);
+      await expect(page.locator(`script[src^="${TURNSTILE_SCRIPT_URL.split('?')[0]}"]`)).toHaveCount(1);
+
+      await openHandoffForm(page);
+      await expect(page.locator('button[type="submit"]')).toBeDisabled();
+      await expect.poll(() => page.evaluate(() => (
+        (window as typeof window & { __turnstileTest: { renderCount: number } }).__turnstileTest.renderCount
+      ))).toBe(2);
+      await expect(page.locator(`script[src^="${TURNSTILE_SCRIPT_URL.split('?')[0]}"]`)).toHaveCount(1);
+    });
+
+    test('resets the consumed token after submit completion so a retry needs a fresh token', async ({ page }) => {
+      await installReadyStart(page);
+      await page.route('**/api/contact/submit', async (route) => {
+        await fulfillJson(route, { internal: 'must not render' }, 503);
+      });
+      await page.goto('/?intent=contract-dev&source=turnstile-submit-reset&locale=en&turnstileManual=1');
+      await openHandoffForm(page);
+      await fillHandoffForm(page, false);
+      await page.evaluate(() => {
+        (window as typeof window & {
+          __turnstileTest: { complete: (token: string) => void };
+        }).__turnstileTest.complete('single-use-submit-token');
+      });
+      const submitButton = page.locator('button[type="submit"]');
+      await expect(submitButton).toBeEnabled();
+      await submitButton.click();
+
+      await expect(page.getByText(/Chat is temporarily unavailable/)).toBeVisible();
+      await expect(submitButton).toBeDisabled();
+      await expect.poll(() => page.evaluate(() => (
+        (window as typeof window & { __turnstileTest: { resetCount: number } }).__turnstileTest.resetCount
+      ))).toBeGreaterThan(0);
+    });
+
+    test('fails closed when the exact Turnstile script is blocked by CSP or the network', async ({ page }) => {
+      await page.unroute(TURNSTILE_SCRIPT_URL);
+      await page.route(TURNSTILE_SCRIPT_URL, async (route) => route.abort('blockedbyclient'));
+      await installReadyStart(page);
+      await page.goto('/?intent=contract-dev&source=turnstile-csp&locale=en');
+      await openHandoffForm(page);
+      await fillHandoffForm(page);
+
+      await expect(page.locator('[data-turnstile-status="error"]')).toBeVisible();
+      await expect(page.locator('button[type="submit"]')).toBeDisabled();
+      await expect(page.locator(`script[src^="${TURNSTILE_SCRIPT_URL.split('?')[0]}"]`)).toHaveCount(0);
+    });
   });
 });

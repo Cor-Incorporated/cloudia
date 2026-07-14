@@ -20,7 +20,11 @@ const COMPLETE_VALUES: HandoffValues = {
   griftHandoffConsent: true,
 };
 
-function renderForm(locale: 'ja' | 'en', offersGriftHandoff = true): string {
+function renderForm(
+  locale: 'ja' | 'en',
+  offersGriftHandoff = true,
+  turnstileToken?: string | null,
+): string {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: { location: { search: `?locale=${locale}` } },
@@ -43,6 +47,13 @@ function renderForm(locale: 'ja' | 'en', offersGriftHandoff = true): string {
         onCancel={() => undefined}
         onSubmit={() => undefined}
         offersGriftHandoff={offersGriftHandoff}
+        turnstile={turnstileToken === undefined ? undefined : {
+          siteKey: 'public-site-key',
+          token: turnstileToken,
+          resetSignal: 0,
+          onTokenChange: () => undefined,
+          onResetRequest: () => undefined,
+        }}
       />
     </LanguageProvider>,
   );
@@ -121,6 +132,19 @@ describe('HandoffForm', () => {
 
     expect(markup).not.toContain('name="griftHandoffConsent"');
     expect(canSubmitHandoff({ ...COMPLETE_VALUES, griftHandoffConsent: false })).toBe(true);
+  });
+
+  it('requires a valid Turnstile token only when the widget is configured', () => {
+    const pendingMarkup = renderForm('en', true, null);
+    const verifiedMarkup = renderForm('en', true, 'callback-token');
+    const unconfiguredMarkup = renderForm('en', true);
+
+    expect(pendingMarkup).toContain('id="cloudia-turnstile-status"');
+    expect(pendingMarkup).toMatch(/<button type="submit" disabled="" aria-describedby="cloudia-turnstile-status"/);
+    expect(verifiedMarkup).toMatch(/<button type="submit" aria-describedby="cloudia-turnstile-status"/);
+    expect(unconfiguredMarkup).not.toContain('id="cloudia-turnstile-status"');
+    expect(unconfiguredMarkup).toMatch(/<button type="submit"/);
+    expect(unconfiguredMarkup).not.toMatch(/<button type="submit" disabled/);
   });
 
   it.each([

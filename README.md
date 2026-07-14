@@ -58,10 +58,16 @@ Create a `.env.local` file with the following variables:
 
 ```env
 VITE_CONTACT_API_BASE=https://your-contact-worker.example.com
+VITE_TURNSTILE_SITE_KEY=your-public-turnstile-sitekey
 GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 ```
 
 No Gemini or Vertex credential belongs in `.env.local`. Local Cloudia development calls the configured contact-chat Worker, or uses `VITE_CONTACT_CHAT_MOCK=1` for UI-only work.
+
+`VITE_TURNSTILE_SITE_KEY` is optional. When it is empty, Cloudia does not load
+Turnstile and preserves the existing form behavior. A Turnstile sitekey is a
+public browser identifier, not a secret. Never put `TURNSTILE_SECRET` (or any
+other server credential) in a `VITE_*` variable.
 
 **Calendar Setup (Optional):**
 1. Open Google Calendar
@@ -181,6 +187,48 @@ not in the shipped production dependency graph and are reviewed separately.
 Do not use `npm audit fix --force` as part of a release because it can make
 unrelated major-version changes.
 
+### Turnstile code boundary and production blockers
+
+When `VITE_TURNSTILE_SITE_KEY` is configured, the contact form uses Cloudflare's
+official explicit-render API from the exact
+`https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit` URL. The
+submit button remains disabled until the callback supplies a valid token. The
+browser sends that ephemeral value only as `turnstileToken` to
+`POST /api/contact/submit`; it is not written to local/session storage, logs,
+URLs, email content, or the Grift handoff. The submit Worker must validate it
+server-side and discard it before any persistence, notification, or Grift
+payload is assembled.
+
+Cloudflare Pages/origin CSP must merge these sources into the existing policy
+before the sitekey is enabled:
+
+```text
+script-src ... https://challenges.cloudflare.com
+frame-src ... https://challenges.cloudflare.com
+connect-src ... 'self' <VITE_CONTACT_API_BASE origin, only when cross-origin>
+```
+
+For this standard no-pre-clearance widget, Cloudflare's Turnstile CSP contract
+adds `script-src` and `frame-src`; it does not require adding the Turnstile
+origin to the top page's `connect-src`. Keep `'self'` for Cloudia's same-origin
+contact API. If pre-clearance is enabled later, Cloudflare also requires
+`connect-src 'self'` for the site's `/cdn-cgi/` request. On Pages, apply the
+merged header through the deployed `_headers`/response-header configuration;
+do not replace unrelated existing CSP sources with the abbreviated example.
+
+Production is **not ready** from this frontend change alone. A trusted operator
+still has to create and hostname-restrict the external widget, add the public
+sitekey to the Pages build, configure the private `TURNSTILE_SECRET` only in the
+submit Worker, enforce Siteverify on every submit (including expected hostname
+and action `contact-submit`), deploy the CSP, finish the planned WAF/rate
+controls, and live-verify the result. Turnstile tokens are single-use and expire
+after five minutes, so every failed/completed submit must use a fresh token.
+
+Contract references: [explicit rendering and lifecycle](https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/),
+[widget configuration](https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/widget-configurations/),
+[server-side validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/),
+and [Turnstile CSP](https://developers.cloudflare.com/turnstile/reference/content-security-policy/).
+
 ### Preview boundary and confirmation
 
 PR CI never creates a Preview. After both CI jobs pass, a trusted operator may
@@ -251,5 +299,6 @@ For issues or questions:
   - `VITE_CONTACT_API_BASE` — e.g. empty for same-origin, or Preview Worker origin
   - `VITE_CONTACT_CHAT_MOCK=1` — mock chat/submit for local UI QA
   - `VITE_FALLBACK_CONTACT_URL` — optional non-Cloudia fallback; default `mailto:cloudia@cor-jp.com` (`/contact` and `/contact/chat` are rejected to prevent loops)
+  - `VITE_TURNSTILE_SITE_KEY` — optional public sitekey; when unset, no widget/script is rendered
 - **Embed**: open with `?embed=1` for compact header (iframe /corsweb #254)
 - **LINE UI**: left Cloudia avatar + bubble, right user bubble; plain-text replies

@@ -6,6 +6,7 @@ import ExpressionAvatar from './components/ExpressionAvatar';
 import IntentPicker from './components/IntentPicker';
 import PiiNotice from './components/PiiNotice';
 import HandoffForm, { HandoffValues } from './components/HandoffForm';
+import { normalizeTurnstileSiteKey } from './components/TurnstileWidget';
 import FallbackNotice from './components/FallbackNotice';
 import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
@@ -127,6 +128,11 @@ const App: React.FC = () => {
   const [readyForContact, setReadyForContact] = useState(false);
   const [showHandoff, setShowHandoff] = useState(false);
   const [handoffDraft, setHandoffDraft] = useState<HandoffValues>(EMPTY_HANDOFF_VALUES);
+  const turnstileSiteKey = useMemo(() => normalizeTurnstileSiteKey(
+    (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_TURNSTILE_SITE_KEY,
+  ), []);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
   const [conversationSummary, setConversationSummary] = useState('');
   const [structuredLead, setStructuredLead] = useState<StructuredLead>({});
   const [classification, setClassification] = useState<Classif>('genuine');
@@ -139,9 +145,18 @@ const App: React.FC = () => {
   const submitLockRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const resetTurnstile = useCallback(() => {
+    setTurnstileToken(null);
+    setTurnstileResetSignal((value) => value + 1);
+  }, []);
+
   useEffect(() => {
     document.title = t('title');
   }, [t, locale]);
+
+  useEffect(() => {
+    resetTurnstile();
+  }, [locale, resetTurnstile, selectedIntent, sessionId]);
 
   useEffect(() => {
     const welcomeKey = appMode === 'ambassador' ? 'welcomeMessageAmbassador' : 'welcomeMessage';
@@ -422,21 +437,24 @@ const App: React.FC = () => {
     idempotencyKeyRef.current = null;
     handoffAcceptedAtRef.current = null;
     releaseSubmissionLock(submitLockRef);
+    resetTurnstile();
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.delete('intent');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [appMode, handleStopRequest, locale, messages.length, selectedIntent, sessionId, submitted, t]);
+  }, [appMode, handleStopRequest, locale, messages.length, resetTurnstile, selectedIntent, sessionId, submitted, t]);
 
   const handleShowHandoff = useCallback(() => {
+    resetTurnstile();
     setHandoffDraft((previous) => previous.summaryText.trim()
       ? previous
       : { ...previous, summaryText: conversationSummary.trim() });
     setShowHandoff(true);
-  }, [conversationSummary]);
+  }, [conversationSummary, resetTurnstile]);
 
-  const handleHandoff = useCallback(async (values: HandoffValues) => {
+  const handleHandoff = useCallback(async (values: HandoffValues, verifiedTurnstileToken?: string) => {
+    if (turnstileSiteKey && !verifiedTurnstileToken) return;
     if (submitted || !tryAcquireSubmissionLock(submitLockRef)) return;
     const controller = beginRequest('submit');
     const handoffMessage = values.message.trim() || t('handoffDefaultMessage');
@@ -476,6 +494,7 @@ const App: React.FC = () => {
         intent: selectedIntent,
         locale,
         source: contactSource,
+        ...(verifiedTurnstileToken ? { turnstileToken: verifiedTurnstileToken } : {}),
         ...(requestsGriftHandoff ? {
           handoffConsent: {
             accepted: true as const,
@@ -524,10 +543,11 @@ const App: React.FC = () => {
       ]);
       setCurrentEmotion(Emotion.SAD);
     } finally {
+      resetTurnstile();
       if (!submissionAccepted) releaseSubmissionLock(submitLockRef);
       finishRequest(controller);
     }
-  }, [beginRequest, classification, contactSource, embedMode, finishRequest, locale, selectedIntent, sessionId, structuredLead, submitted, t]);
+  }, [beginRequest, classification, contactSource, embedMode, finishRequest, locale, resetTurnstile, selectedIntent, sessionId, structuredLead, submitted, t, turnstileSiteKey]);
 
   const displayEmotion = isLoading ? Emotion.THINKING : currentEmotion;
   const shellClass = embedMode
@@ -687,10 +707,20 @@ const App: React.FC = () => {
               values={handoffDraft}
               onChange={setHandoffDraft}
               disabled={isLoading}
-              onBack={() => setShowHandoff(false)}
+              onBack={() => {
+                resetTurnstile();
+                setShowHandoff(false);
+              }}
               onCancel={handleStartNewConversation}
               onSubmit={handleHandoff}
               offersGriftHandoff={isGriftHandoffIntent(selectedIntent)}
+              turnstile={turnstileSiteKey ? {
+                siteKey: turnstileSiteKey,
+                token: turnstileToken,
+                resetSignal: turnstileResetSignal,
+                onTokenChange: setTurnstileToken,
+                onResetRequest: resetTurnstile,
+              } : undefined}
             />
           )}
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import TurnstileWidget from './TurnstileWidget';
 
 export interface HandoffValues {
   name: string;
@@ -28,8 +29,17 @@ interface HandoffFormProps {
   disabled?: boolean;
   onBack: () => void;
   onCancel: () => void;
-  onSubmit: (values: HandoffValues) => void;
+  onSubmit: (values: HandoffValues, turnstileToken?: string) => void;
   offersGriftHandoff?: boolean;
+  turnstile?: HandoffTurnstileControl;
+}
+
+export interface HandoffTurnstileControl {
+  siteKey: string;
+  token: string | null;
+  resetSignal: number;
+  onTokenChange: (token: string | null) => void;
+  onResetRequest: () => void;
 }
 
 export function canSubmitHandoff(values: HandoffValues): boolean {
@@ -77,16 +87,18 @@ const HandoffForm: React.FC<HandoffFormProps> = ({
   onCancel,
   onSubmit,
   offersGriftHandoff = false,
+  turnstile,
 }) => {
   const { locale, t } = useLanguage();
   // honeypot
   const [website, setWebsite] = useState('');
   const summaryInvalid = Boolean(values.summaryText) && !isConfirmedSummaryText(values.summaryText);
+  const hasRequiredTurnstileToken = !turnstile || Boolean(turnstile.token);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (website) return; // bot
-    if (!canSubmitHandoff(values)) return;
+    if (!canSubmitHandoff(values) || !hasRequiredTurnstileToken) return;
     onSubmit({
       name: values.name.trim(),
       email: values.email.trim(),
@@ -96,10 +108,11 @@ const HandoffForm: React.FC<HandoffFormProps> = ({
       summaryConfirmed: values.summaryConfirmed,
       privacyConsent: values.privacyConsent,
       griftHandoffConsent: offersGriftHandoff && values.griftHandoffConsent,
-    });
+    }, turnstile?.token ?? undefined);
   };
 
   const update = (field: keyof HandoffValues, value: string | boolean) => {
+    if (field === 'summaryText' && values.summaryText !== value) turnstile?.onResetRequest();
     onChange(updateHandoffValues(values, field, value, offersGriftHandoff));
   };
 
@@ -208,6 +221,13 @@ const HandoffForm: React.FC<HandoffFormProps> = ({
         <span>{t('handoffMessage')}</span>
         <textarea className={field + ' min-h-[72px]'} value={values.message} onChange={(e) => update('message', e.target.value)} disabled={disabled} />
       </label>
+      {turnstile && (
+        <TurnstileWidget
+          siteKey={turnstile.siteKey}
+          resetSignal={turnstile.resetSignal}
+          onTokenChange={turnstile.onTokenChange}
+        />
+      )}
       {/* honeypot */}
       <div className="absolute -left-[9999px] opacity-0 h-0 overflow-hidden" aria-hidden="true">
         <label>
@@ -226,7 +246,8 @@ const HandoffForm: React.FC<HandoffFormProps> = ({
         </button>
         <button
           type="submit"
-          disabled={disabled || !canSubmitHandoff(values)}
+          disabled={disabled || !canSubmitHandoff(values) || !hasRequiredTurnstileToken}
+          aria-describedby={turnstile ? 'cloudia-turnstile-status' : undefined}
           className="min-h-11 w-full rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300 sm:w-auto"
         >
           {t('handoffSubmit')}

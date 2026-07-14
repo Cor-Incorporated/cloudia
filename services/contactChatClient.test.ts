@@ -264,6 +264,39 @@ describe('contactChatClient', () => {
     });
   });
 
+  it('sends a bounded Turnstile token only in the submit verification field', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: '相談内容',
+      turnstileToken: '  ephemeral-turnstile-token  ',
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(body.turnstileToken).toBe('ephemeral-turnstile-token');
+    expect(body.message).not.toContain('ephemeral-turnstile-token');
+    expect(body.summaryText).not.toContain('ephemeral-turnstile-token');
+  });
+
+  it.each(['', 'x'.repeat(2049)])('omits an invalid Turnstile token', async (turnstileToken) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: '相談内容',
+      turnstileToken,
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).not.toHaveProperty('turnstileToken');
+  });
+
   it('forwards structuredLead as non-PII submit metadata when available', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,

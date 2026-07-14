@@ -16,6 +16,18 @@ form.safe-area-pad-bottom {
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
 }
 
+/* Turnstile's flexible widget stays inside narrow standalone and embed forms. */
+.cloudia-turnstile {
+  display: flex;
+  max-inline-size: 100%;
+  overflow: hidden;
+  justify-content: center;
+}
+
+.cloudia-turnstile iframe {
+  max-inline-size: 100%;
+}
+
 @media (min-width: 640px) {
   .safe-area-pad-bottom {
     padding-bottom: calc(1rem + env(safe-area-inset-bottom));
