@@ -1,3 +1,6 @@
+/*
+  Content-Security-Policy: frame-ancestors 'self' https://cor-jp.com https://www.cor-jp.com
+
 /release.json
   Cache-Control: no-store
   X-Content-Type-Options: nosniff

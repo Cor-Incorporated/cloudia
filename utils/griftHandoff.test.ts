@@ -4,6 +4,7 @@ import {
   openGriftHandoff,
   parseAllowedGriftHandoffUrl,
   parseValidGriftHandoffExpiry,
+  resolveAllowedEmbedParentOrigins,
   resolveAllowedGriftPublicOrigins,
   resolveEmbedParentOrigin,
   type GriftHandoffBrowser,
@@ -13,6 +14,7 @@ const EXCHANGE_CODE = 'Ma_XZhn01UsAfQRYmYxXD9KZVzK0bKQCSv0nZFbofUM';
 const PORTAL_URL = `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`;
 const PREVIEW_ORIGIN = 'https://grift-preview.example.run.app';
 const PREVIEW_PORTAL_URL = `${PREVIEW_ORIGIN}/chat/portal#exchange_code=${EXCHANGE_CODE}`;
+const FIREBASE_PREVIEW_PARENT_ORIGIN = 'https://cor-jp-main--preview-abc123.web.app';
 
 function futureExpiry(offsetMs = 4 * 60 * 1000): string {
   return new Date(Date.now() + offsetMs).toISOString();
@@ -142,6 +144,90 @@ describe('Grift handoff navigation', () => {
     expect(browser.location.assign).not.toHaveBeenCalled();
   });
 
+  it('adds an exact configured Firebase Preview parent without weakening production parents', () => {
+    expect([...resolveAllowedEmbedParentOrigins(FIREBASE_PREVIEW_PARENT_ORIGIN)]).toEqual([
+      'https://cor-jp.com',
+      'https://www.cor-jp.com',
+      FIREBASE_PREVIEW_PARENT_ORIGIN,
+    ]);
+    expect(resolveEmbedParentOrigin(
+      `${FIREBASE_PREVIEW_PARENT_ORIGIN}/contact/?intent=estimate-audit`,
+      'https://codex-cloudia-grift-uat.cloudia-contact.pages.dev',
+      FIREBASE_PREVIEW_PARENT_ORIGIN,
+    )).toBe(FIREBASE_PREVIEW_PARENT_ORIGIN);
+    expect(resolveEmbedParentOrigin(
+      'https://www.cor-jp.com/contact/',
+      'https://cloudia-contact.pages.dev',
+      FIREBASE_PREVIEW_PARENT_ORIGIN,
+    )).toBe('https://www.cor-jp.com');
+  });
+
+  it('keeps the default environment allowlist limited to production parents when unset', () => {
+    expect([...resolveAllowedEmbedParentOrigins()]).toEqual([
+      'https://cor-jp.com',
+      'https://www.cor-jp.com',
+    ]);
+  });
+
+  it('posts only to the exact configured Firebase Preview origin derived from referrer', () => {
+    const browser = framedBrowser(
+      `${FIREBASE_PREVIEW_PARENT_ORIGIN}/contact/chat/?embed=1`,
+      'https://codex-cloudia-grift-uat.cloudia-contact.pages.dev',
+    );
+    const expiresAt = futureExpiry();
+
+    expect(openGriftHandoff(
+      PORTAL_URL,
+      true,
+      browser,
+      expiresAt,
+      '',
+      FIREBASE_PREVIEW_PARENT_ORIGIN,
+    )).toBe('messaged');
+    expect(browser.parent.postMessage).toHaveBeenCalledWith({
+      type: 'cloudia:grift-handoff-ready',
+      url: PORTAL_URL,
+      expiresAt,
+    }, FIREBASE_PREVIEW_PARENT_ORIGIN);
+  });
+
+  it.each([
+    `https://user:password@${new URL(FIREBASE_PREVIEW_PARENT_ORIGIN).hostname}`,
+    `${FIREBASE_PREVIEW_PARENT_ORIGIN}:443`,
+    `${FIREBASE_PREVIEW_PARENT_ORIGIN}:444`,
+    `http://${new URL(FIREBASE_PREVIEW_PARENT_ORIGIN).hostname}`,
+    `https://*.web.app`,
+    `${FIREBASE_PREVIEW_PARENT_ORIGIN}/`,
+    `${FIREBASE_PREVIEW_PARENT_ORIGIN}/contact/`,
+    `${FIREBASE_PREVIEW_PARENT_ORIGIN}?preview=1`,
+    `${FIREBASE_PREVIEW_PARENT_ORIGIN}#preview`,
+    'HTTPS://cor-jp-main--preview-abc123.web.app',
+    'https://COR-JP-MAIN--PREVIEW-ABC123.web.app',
+    'https://cor-jp-main--preview-abc123%2Eweb.app',
+    'https://cor-jp-main--preview-abc123.web.app.',
+  ])('rejects non-canonical or unsafe configured parent origin %s', (configuredOrigin) => {
+    expect(resolveAllowedEmbedParentOrigins(configuredOrigin)).toEqual(new Set([
+      'https://cor-jp.com',
+      'https://www.cor-jp.com',
+    ]));
+  });
+
+  it.each([
+    `${FIREBASE_PREVIEW_PARENT_ORIGIN}.evil.example/contact/`,
+    `https://user:password@${new URL(FIREBASE_PREVIEW_PARENT_ORIGIN).hostname}/contact/`,
+    `${FIREBASE_PREVIEW_PARENT_ORIGIN}:443/contact/`,
+    `http://${new URL(FIREBASE_PREVIEW_PARENT_ORIGIN).hostname}/contact/`,
+    'HTTPS://cor-jp-main--preview-abc123.web.app/contact/',
+    'https://COR-JP-MAIN--PREVIEW-ABC123.web.app/contact/',
+    ' https://cor-jp-main--preview-abc123.web.app/contact/',
+  ])('rejects a confused Firebase Preview referrer %s', (referrer) => {
+    expect(resolveEmbedParentOrigin(
+      referrer,
+      'https://codex-cloudia-grift-uat.cloudia-contact.pages.dev',
+      FIREBASE_PREVIEW_PARENT_ORIGIN,
+    )).toBeNull();
+  });
+
   it('uses the same configured Preview origin contract before posting to an embed parent', () => {
     const browser = framedBrowser('https://cor-jp.com/contact/');
     const expiresAt = futureExpiry();
@@ -196,6 +282,9 @@ describe('Grift handoff navigation', () => {
       'https://cor-jp.com.evil.example/contact/',
       'https://user:password@cor-jp.com/contact/',
       'http://cor-jp.com/contact/',
+      'https://cor-jp.com:443/contact/',
+      'HTTPS://cor-jp.com/contact/',
+      'https://COR-JP.COM/contact/',
     ]) {
       const browser = framedBrowser(referrer);
       expect(openGriftHandoff(PORTAL_URL, true, browser, expiresAt), referrer).toBe('blocked');

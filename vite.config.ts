@@ -1,10 +1,15 @@
 import path from 'path';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { parseCanonicalExactHttpsOrigin } from './utils/exactHttpsOrigin';
 
 const CLOUDIA_REPOSITORY = 'Cor-Incorporated/cloudia';
 const FULL_LOWER_SHA_PATTERN = /^[0-9a-f]{40}$/;
 const SAFE_DEPLOYMENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:@/-]{4,255}$/;
 const SAFE_RELEASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
+const PRODUCTION_EMBED_PARENT_ORIGINS = [
+  'https://cor-jp.com',
+  'https://www.cor-jp.com',
+] as const;
 
 export interface PreviewReleaseMetadata {
   status: 'ok';
@@ -23,6 +28,11 @@ interface PreviewReleaseBuildEnv {
 
 export interface PreviewReleaseAsset {
   fileName: 'release.json';
+  source: string;
+}
+
+export interface CloudiaHeadersAsset {
+  fileName: '_headers';
   source: string;
 }
 
@@ -79,16 +89,24 @@ export function previewReleaseAssetForBuild(
   };
 }
 
-function previewReleaseProvenancePlugin(asset: PreviewReleaseAsset | undefined): Plugin {
+function cloudiaBuildAssetsPlugin(
+  releaseAsset: PreviewReleaseAsset | undefined,
+  headersAsset: CloudiaHeadersAsset,
+): Plugin {
   return {
-    name: 'cloudia-preview-release-provenance',
+    name: 'cloudia-environment-build-assets',
     apply: 'build',
     generateBundle() {
-      if (!asset) return;
       this.emitFile({
         type: 'asset',
-        fileName: asset.fileName,
-        source: asset.source,
+        fileName: headersAsset.fileName,
+        source: headersAsset.source,
+      });
+      if (!releaseAsset) return;
+      this.emitFile({
+        type: 'asset',
+        fileName: releaseAsset.fileName,
+        source: releaseAsset.source,
       });
     },
   };
@@ -99,6 +117,56 @@ export function resolveGriftPublicUrlOriginsForBuild(
   configuredOrigins: string | undefined,
 ): string {
   return mode === 'production' ? '' : configuredOrigins || '';
+}
+
+export function resolveCloudiaEmbedParentOriginsForBuild(
+  mode: string,
+  configuredOrigins: string | undefined,
+): string {
+  // The additional parent allowlist exists only for isolated Preview/Staging
+  // artifacts. Production always relies on the two built-in cor-jp.com origins.
+  if (mode === 'production') return '';
+  if (!configuredOrigins) {
+    if (mode === 'preview') {
+      throw new Error('Invalid or missing public Preview build variable: VITE_CLOUDIA_EMBED_PARENT_ORIGINS');
+    }
+    return '';
+  }
+
+  const origins = new Set<string>();
+  for (const rawOrigin of configuredOrigins.split(',')) {
+    const origin = parseCanonicalExactHttpsOrigin(rawOrigin.trim());
+    if (!origin) {
+      // Do not echo rejected public configuration into retained build logs.
+      throw new Error('Invalid or missing public Preview build variable: VITE_CLOUDIA_EMBED_PARENT_ORIGINS');
+    }
+    origins.add(origin);
+  }
+  return [...origins].join(',');
+}
+
+export function cloudiaHeadersAssetForBuild(
+  mode: string,
+  configuredOrigins: string | undefined,
+): CloudiaHeadersAsset {
+  const previewOrigins = resolveCloudiaEmbedParentOriginsForBuild(mode, configuredOrigins)
+    .split(',')
+    .filter(Boolean);
+  const frameAncestors = ["'self'", ...PRODUCTION_EMBED_PARENT_ORIGINS, ...previewOrigins];
+
+  return {
+    fileName: '_headers',
+    source: [
+      '/*',
+      `  Content-Security-Policy: frame-ancestors ${frameAncestors.join(' ')}`,
+      '',
+      '/release.json',
+      '  Cache-Control: no-store',
+      '  X-Content-Type-Options: nosniff',
+      '  ! Access-Control-Allow-Origin',
+      '',
+    ].join('\n'),
+  };
 }
 
 export function resolveContactApiBaseForBuild(
@@ -114,6 +182,10 @@ export function resolveContactApiBaseForBuild(
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', ['VITE_', '']);
     const previewReleaseAsset = previewReleaseAssetForBuild(mode, env);
+    const headersAsset = cloudiaHeadersAssetForBuild(
+      mode,
+      env.VITE_CLOUDIA_EMBED_PARENT_ORIGINS,
+    );
     // Cloudflare's contact edge serves the Pages app under /contact/chat and
     // strips that prefix before forwarding requests to the Pages origin.
     // Keep local dev rooted at / while making a plain production build deployable
@@ -127,18 +199,23 @@ export default defineConfig(({ mode }) => {
       mode,
       env.VITE_GRIFT_PUBLIC_URL_ORIGINS,
     );
+    const embedParentOrigins = resolveCloudiaEmbedParentOriginsForBuild(
+      mode,
+      env.VITE_CLOUDIA_EMBED_PARENT_ORIGINS,
+    );
     const contactApiBase = resolveContactApiBaseForBuild(
       mode,
       env.VITE_CONTACT_API_BASE,
     );
     return {
       base,
-      plugins: [previewReleaseProvenancePlugin(previewReleaseAsset)],
+      plugins: [cloudiaBuildAssetsPlugin(previewReleaseAsset, headersAsset)],
       define: {
         'process.env.GOOGLE_CALENDAR_ICAL_URL': JSON.stringify(env.VITE_GOOGLE_CALENDAR_ICAL_URL || env.GOOGLE_CALENDAR_ICAL_URL),
         'import.meta.env.VITE_ROBOTS': JSON.stringify(robots),
         'import.meta.env.VITE_CONTACT_API_BASE': JSON.stringify(contactApiBase),
         'import.meta.env.VITE_GRIFT_PUBLIC_URL_ORIGINS': JSON.stringify(griftPublicUrlOrigins),
+        'import.meta.env.VITE_CLOUDIA_EMBED_PARENT_ORIGINS': JSON.stringify(embedParentOrigins),
       },
       resolve: {
         alias: {

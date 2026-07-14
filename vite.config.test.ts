@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  cloudiaHeadersAssetForBuild,
   previewReleaseAssetForBuild,
+  resolveCloudiaEmbedParentOriginsForBuild,
   resolveContactApiBaseForBuild,
   resolveGriftPublicUrlOriginsForBuild,
   resolvePreviewReleaseMetadata,
@@ -11,6 +13,88 @@ const validPreviewReleaseEnv = Object.freeze({
   VITE_CLOUDIA_CANDIDATE_SHA: 'a'.repeat(40),
   VITE_CLOUDIA_DEPLOYMENT_ID: 'cloudia-preview-20260714-001',
   VITE_CLOUDIA_RELEASE_ID: 'cloudia-grift-uat-20260714-001',
+});
+
+describe('Cloudia embed parent origin build boundary', () => {
+  const firebasePreviewOrigin = 'https://cor-jp-main--preview-abc123.web.app';
+
+  it('drops Firebase Preview parents from production even when CI carries the variable', () => {
+    expect(resolveCloudiaEmbedParentOriginsForBuild('production', firebasePreviewOrigin)).toBe('');
+  });
+
+  it('preserves configured parents only for a non-production build mode', () => {
+    expect(resolveCloudiaEmbedParentOriginsForBuild('preview', firebasePreviewOrigin))
+      .toBe(firebasePreviewOrigin);
+  });
+
+  it('emits the exact production policy and ignores even invalid injected Preview config', () => {
+    expect(cloudiaHeadersAssetForBuild(
+      'production',
+      `${firebasePreviewOrigin},https://preview.example.web.app/path`,
+    )).toEqual({
+      fileName: '_headers',
+      source: [
+        '/*',
+        "  Content-Security-Policy: frame-ancestors 'self' https://cor-jp.com https://www.cor-jp.com",
+        '',
+        '/release.json',
+        '  Cache-Control: no-store',
+        '  X-Content-Type-Options: nosniff',
+        '  ! Access-Control-Allow-Origin',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('emits the exact Preview policy with canonical configured parents', () => {
+    expect(cloudiaHeadersAssetForBuild('preview', firebasePreviewOrigin).source).toBe([
+      '/*',
+      `  Content-Security-Policy: frame-ancestors 'self' https://cor-jp.com https://www.cor-jp.com ${firebasePreviewOrigin}`,
+      '',
+      '/release.json',
+      '  Cache-Control: no-store',
+      '  X-Content-Type-Options: nosniff',
+      '  ! Access-Control-Allow-Origin',
+      '',
+    ].join('\n'));
+  });
+
+  it('deduplicates configured origins deterministically', () => {
+    expect(resolveCloudiaEmbedParentOriginsForBuild(
+      'preview',
+      `${firebasePreviewOrigin}, ${firebasePreviewOrigin}`,
+    )).toBe(firebasePreviewOrigin);
+  });
+
+  it.each([
+    undefined,
+    '',
+    `${firebasePreviewOrigin},`,
+    `,${firebasePreviewOrigin}`,
+    `${firebasePreviewOrigin},https://*.web.app`,
+    `${firebasePreviewOrigin},https://user:password@example.web.app`,
+    `${firebasePreviewOrigin},https://example.web.app/`,
+    `${firebasePreviewOrigin},https://example.web.app/path`,
+    `${firebasePreviewOrigin},https://example.web.app?preview=1`,
+    `${firebasePreviewOrigin},https://example.web.app#preview`,
+    `${firebasePreviewOrigin},https://example.web.app:443`,
+    `${firebasePreviewOrigin},http://example.web.app`,
+    `${firebasePreviewOrigin},HTTPS://example.web.app`,
+    `${firebasePreviewOrigin},https://EXAMPLE.web.app`,
+    `${firebasePreviewOrigin},https://example%2Eweb.app`,
+    `${firebasePreviewOrigin},https://example.web.app.`,
+  ])('fails the whole Preview build boundary for missing or polluted config: %s', (configured) => {
+    expect(() => cloudiaHeadersAssetForBuild('preview', configured)).toThrow(
+      'Invalid or missing public Preview build variable: VITE_CLOUDIA_EMBED_PARENT_ORIGINS',
+    );
+  });
+
+  it('does not echo a rejected parent origin into build logs', () => {
+    const rejected = 'https://preview.example.web.app/path-with-sensitive-marker';
+    expect(() => cloudiaHeadersAssetForBuild('preview', rejected)).toThrowError(
+      expect.not.stringContaining(rejected),
+    );
+  });
 });
 
 describe('Grift public origin build boundary', () => {
@@ -46,7 +130,7 @@ describe('Contact API build boundary', () => {
 });
 
 describe('Cloudia Preview release provenance', () => {
-  it('detaches the Pages default CORS header while retaining no-store and nosniff', () => {
+  it('keeps the public fallback header production-safe with the release protections', () => {
     const headersFile = readFileSync(new URL('./public/_headers', import.meta.url), 'utf8');
     const releaseRule = headersFile
       .split(/\r?\n(?=\/)/)
@@ -60,6 +144,10 @@ describe('Cloudia Preview release provenance', () => {
       '! Access-Control-Allow-Origin',
     ]);
     expect(releaseRule).not.toMatch(/^\s*Access-Control-Allow-Origin\s*:/im);
+    expect(headersFile).toContain(
+      "Content-Security-Policy: frame-ancestors 'self' https://cor-jp.com https://www.cor-jp.com",
+    );
+    expect(headersFile).not.toContain('web.app');
   });
 
   it('emits the exact public release schema as a static root asset', () => {

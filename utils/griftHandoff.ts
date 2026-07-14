@@ -1,3 +1,5 @@
+import { parseCanonicalExactHttpsOrigin } from './exactHttpsOrigin';
+
 export const GRIFT_HANDOFF_MESSAGE_TYPE = 'cloudia:grift-handoff-ready';
 export const GRIFT_MAX_PORTAL_TTL_MS = 5 * 60 * 1000;
 
@@ -8,7 +10,8 @@ const GRIFT_EXCHANGE_FRAGMENT = /^#exchange_code=([A-Za-z0-9_-]{43})$/;
 // its final character carries four data bits and two zero padding bits.
 const GRIFT_32_BYTE_BASE64URL = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 const CONFIGURED_GRIFT_PUBLIC_URL_ORIGINS = import.meta.env.VITE_GRIFT_PUBLIC_URL_ORIGINS;
-const TRUSTED_EMBED_PARENT_ORIGINS = new Set([
+const CONFIGURED_EMBED_PARENT_ORIGINS = import.meta.env.VITE_CLOUDIA_EMBED_PARENT_ORIGINS;
+const PRODUCTION_EMBED_PARENT_ORIGINS = new Set([
   'https://cor-jp.com',
   'https://www.cor-jp.com',
 ]);
@@ -95,12 +98,52 @@ export function parseValidGriftHandoffExpiry(value: unknown, now = Date.now()): 
   return new Date(expiresAt).toISOString();
 }
 
-export function resolveEmbedParentOrigin(referrer: unknown, childOrigin: unknown): string | null {
-  if (typeof referrer !== 'string' || !referrer.trim() || typeof childOrigin !== 'string') return null;
+/**
+ * Build the parent-frame allowlist from canonical HTTPS origins only.
+ *
+ * Vite build configuration erases the public Preview variable from production
+ * artifacts. This runtime parser remains fail-closed as a second boundary: it
+ * rejects credentials, wildcards, paths, ports (including an explicit :443),
+ * and any input whose spelling differs from URL's canonical origin.
+ */
+export function resolveAllowedEmbedParentOrigins(
+  configuredOrigins: unknown = CONFIGURED_EMBED_PARENT_ORIGINS,
+): ReadonlySet<string> {
+  const origins = new Set(PRODUCTION_EMBED_PARENT_ORIGINS);
+  if (typeof configuredOrigins !== 'string') return origins;
+
+  for (const rawOrigin of configuredOrigins.split(',')) {
+    const candidate = rawOrigin.trim();
+    const origin = parseCanonicalExactHttpsOrigin(candidate);
+    if (origin) origins.add(origin);
+  }
+  return origins;
+}
+
+function rawOriginPrefix(value: string): string | null {
+  return /^([A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#]*)(?:[/?#]|$)/.exec(value)?.[1] ?? null;
+}
+
+export function resolveEmbedParentOrigin(
+  referrer: unknown,
+  childOrigin: unknown,
+  configuredOrigins: unknown = CONFIGURED_EMBED_PARENT_ORIGINS,
+): string | null {
+  if (
+    typeof referrer !== 'string'
+    || !referrer
+    || referrer !== referrer.trim()
+    || typeof childOrigin !== 'string'
+  ) return null;
   try {
     const parentUrl = new URL(referrer);
     if (parentUrl.username || parentUrl.password) return null;
-    if (TRUSTED_EMBED_PARENT_ORIGINS.has(parentUrl.origin)) return parentUrl.origin;
+    const rawParentOrigin = rawOriginPrefix(referrer);
+    const trustedHttpsParent = parentUrl.protocol === 'https:'
+      && !parentUrl.port
+      && rawParentOrigin === parentUrl.origin
+      && resolveAllowedEmbedParentOrigins(configuredOrigins).has(parentUrl.origin);
+    if (trustedHttpsParent) return parentUrl.origin;
 
     const childUrl = new URL(childOrigin);
     const localDevelopment = LOOPBACK_HOSTS.has(childUrl.hostname)
@@ -119,6 +162,7 @@ export function openGriftHandoff(
   browser: GriftHandoffBrowser = window,
   expiresAt?: string,
   configuredOrigins: unknown = CONFIGURED_GRIFT_PUBLIC_URL_ORIGINS,
+  configuredEmbedParentOrigins: unknown = CONFIGURED_EMBED_PARENT_ORIGINS,
 ): GriftHandoffAction {
   // Both top-level navigation and the URL sent to an embedded parent cross the
   // same exact-origin/path/token validation boundary.
@@ -128,7 +172,11 @@ export function openGriftHandoff(
   const isFramed = browser.parent !== browser;
   if (isFramed) {
     if (!embed) return 'blocked';
-    const targetOrigin = resolveEmbedParentOrigin(browser.document?.referrer, browser.location.origin);
+    const targetOrigin = resolveEmbedParentOrigin(
+      browser.document?.referrer,
+      browser.location.origin,
+      configuredEmbedParentOrigins,
+    );
     if (!targetOrigin) return 'blocked';
     try {
       browser.parent.postMessage({
