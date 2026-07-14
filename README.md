@@ -61,6 +61,10 @@ VITE_CONTACT_API_BASE=https://your-contact-worker.example.com
 VITE_TURNSTILE_SITE_KEY=your-public-turnstile-sitekey
 # Preview/Staging build only; exact HTTPS origins, comma-separated, no paths or wildcards.
 VITE_GRIFT_PUBLIC_URL_ORIGINS=https://approved-grift-preview.example.run.app
+# Preview/Staging provenance only; public identifiers, never credentials.
+VITE_CLOUDIA_CANDIDATE_SHA=0123456789abcdef0123456789abcdef01234567
+VITE_CLOUDIA_DEPLOYMENT_ID=cloudia-preview-20260714-001
+VITE_CLOUDIA_RELEASE_ID=cloudia-grift-uat-20260714-001
 GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 ```
 
@@ -92,6 +96,24 @@ the exact `/chat/portal#exchange_code=<43-character base64url code>` contract.
 The code is a no-padding encoding of 32 random bytes and expires no more than
 five minutes after receipt. Cloudia validates and forwards the unchanged URL;
 it does not read, exchange, persist, or log the fragment credential.
+
+`npm run build:preview` also requires the three public provenance identifiers
+shown above. The build fails closed unless `VITE_CLOUDIA_CANDIDATE_SHA` is a
+full 40-character lowercase commit SHA and the deployment/release identifiers
+match their bounded safe-character contracts. A successful Preview build emits
+the exact six-field `/release.json` readback used by the UAT runner:
+
+```json
+{"status":"ok","service":"cloudia","repository":"Cor-Incorporated/cloudia","candidate_sha":"0123456789abcdef0123456789abcdef01234567","deployment_id":"cloudia-preview-20260714-001","release_id":"cloudia-grift-uat-20260714-001"}
+```
+
+This file contains public deployment provenance only. Never place a token,
+secret, tenant ID, email address, URL credential, or customer data in these
+variables. Pages serves the file with `Cache-Control: no-store` and
+`X-Content-Type-Options: nosniff`. The `/release.json` rule in `public/_headers`
+explicitly detaches Pages' default `Access-Control-Allow-Origin` header, so the
+deployed response is not readable through browser CORS. Normal production
+builds ignore these variables and do not emit `release.json`.
 
 **Calendar Setup (Optional):**
 1. Open Google Calendar
@@ -260,14 +282,33 @@ build a noindex Preview and deploy it to a non-`main` Pages branch from an
 authenticated environment:
 
 ```bash
-VITE_ROBOTS=noindex,nofollow npm run build
+VITE_ROBOTS=noindex,nofollow \
+VITE_CLOUDIA_CANDIDATE_SHA="<exact-40-character-lowercase-commit>" \
+VITE_CLOUDIA_DEPLOYMENT_ID="<public-pages-deployment-id>" \
+VITE_CLOUDIA_RELEASE_ID="<public-uat-release-id>" \
+npm run build:preview
 npx wrangler pages deploy dist --project-name cloudia-contact --branch "<preview-branch>"
 ```
 
 Record the Preview URL and source commit, then confirm `/contact/chat/` loads,
-assets return 200, the page is `noindex`, there are no browser console errors,
+assets return 200, `/release.json` has the exact expected public identifiers and
+`no-store`/`nosniff` without CORS, the page is `noindex`, there are no browser console errors,
 and the four eligible intents complete the mocked/test-safe handoff paths. Do
 not enter real customer PII during Preview verification.
+
+After the Preview deployment, verify the effective response with a real `GET`
+(not only the build artifact). This gate must fail if CORS is present or either
+security/cache header is missing:
+
+```bash
+preview_url="https://<exact-cloudia-preview-host>"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+curl -fsS -D "$tmp_dir/headers" -o "$tmp_dir/release.json" "$preview_url/release.json"
+! grep -Eiq '^access-control-allow-origin:' "$tmp_dir/headers"
+grep -Eiq '^cache-control:[[:space:]]*no-store[[:space:]]*$' "$tmp_dir/headers"
+grep -Eiq '^x-content-type-options:[[:space:]]*nosniff[[:space:]]*$' "$tmp_dir/headers"
+```
 
 ### Production boundary and confirmation
 
