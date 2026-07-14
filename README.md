@@ -66,6 +66,11 @@ GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 
 No Gemini or Vertex credential belongs in `.env.local`. Local Cloudia development calls the configured contact-chat Worker, or uses `VITE_CONTACT_CHAT_MOCK=1` for UI-only work.
 
+`VITE_CONTACT_API_BASE` is used only by non-production builds. Production mode
+forces it to an empty value so the deployed `/contact/chat/` app always calls
+corsweb's same-origin `/api/contact/*` routes, even if a Preview Pages variable
+is accidentally inherited by the production build.
+
 `VITE_TURNSTILE_SITE_KEY` is optional. When it is empty, Cloudia does not load
 Turnstile and preserves the existing form behavior. A Turnstile sitekey is a
 public browser identifier, not a secret. Never put `TURNSTILE_SECRET` (or any
