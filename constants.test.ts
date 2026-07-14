@@ -3,6 +3,18 @@ import { getSystemInstruction } from './constants';
 import { translations } from './translations';
 
 describe('Cloudia company naming', () => {
+  it('keeps Japanese and English translation keys complete and non-empty', () => {
+    const englishKeys = Object.keys(translations.en).sort();
+    const japaneseKeys = Object.keys(translations.ja).sort();
+    expect(japaneseKeys).toEqual(englishKeys);
+    for (const locale of ['ja', 'en'] as const) {
+      for (const key of englishKeys) {
+        expect(translations[locale][key as keyof typeof translations.en].trim(), `${locale}.${key}`)
+          .not.toBe('');
+      }
+    }
+  });
+
   it('keeps the regular and ambassador greetings short', () => {
     for (const locale of ['ja', 'en'] as const) {
       expect(translations[locale].welcomeMessage).not.toContain('コー株式会社');

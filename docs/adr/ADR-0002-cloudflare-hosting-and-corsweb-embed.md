@@ -1,6 +1,6 @@
 # ADR-0002 Cloudflare ホスティング・UI・corsweb 公開形態
 
-## ステータス: Accepted (2026-07-10) / Revised (2026-07-10)
+## ステータス: Accepted (2026-07-10) / Revised (2026-07-15)
 
 ## 背景
 
@@ -26,6 +26,26 @@
 
 - `?intent=` で初期選択肢をプリセット（ADR-0010 キー）。
 - SSGFORM / 最小 ContactForm は **fallback のみ**（JS 無効・AI 障害・a11y）。常時目立つ位置に出さない。fallback にも Turnstile・rate limit 相当を適用。
+- 本番は Cloudflare edge が `cor-jp.com/contact/chat/*` を Cloudia Pages の配信物へ直接マウントし、`/contact/chat/` prefix を Pages 側から隠蔽する。Cloudia の API は同一オリジン `/api/contact/*` のままとする。
+- Firebase Preview のみ corsweb wrapper から Cloudia Preview を iframe する。wrapper と本番ランチャーは iframe の `load` を起動完了とみなさず、Cloudia React root が allowlist 済み親 origin へ送る exact `cloudia:ready` を待つ。
+
+#### Preview build 契約
+
+Preview build/runbook の正本は `README.md` の「Preview boundary and
+confirmation」、build entrypoint の正本は `npm run build:preview` とする。
+4つの公開契約は用途を混同しない。
+
+| 契約 | 変数 | PR #281 Preview値 / 意味 |
+|---|---|---|
+| contact API origin | `VITE_CONTACT_API_BASE` | `https://cor-contact-chat-preview.company-997.workers.dev`。Cloudia browserのAPI送信先 |
+| Grift public origin | `VITE_GRIFT_PUBLIC_URL_ORIGINS` | `https://preview---liff-pqvjbdrijq-an.a.run.app`。handoff URLの許可origin |
+| Cloudia parent origin | `VITE_CLOUDIA_EMBED_PARENT_ORIGINS` | `https://cor-jp-main--pr281-ec0mrjn3.web.app`。CloudiaをiframeするFirebase wrapper |
+| release metadata | `VITE_CLOUDIA_CANDIDATE_SHA`, `VITE_CLOUDIA_DEPLOYMENT_ID`, `VITE_CLOUDIA_RELEASE_ID` | Preview artifactの公開provenance。origin allowlistではない |
+
+production direct mountではAPIを同一origin、Griftを
+`https://app.griftai.org`へ固定し、親originは `https://cor-jp.com` と
+`https://www.cor-jp.com` のみとする。上表のFirebase Preview親originと
+Preview release metadataはproduction artifactへ混入させない。
 
 ### UI（LINE 風 + 表情）
 

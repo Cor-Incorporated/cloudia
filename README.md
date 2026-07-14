@@ -42,7 +42,7 @@ A React TypeScript contact-reception experience with an eight-expression Cloudia
 
 ## 📋 Prerequisites
 
-- **Node.js** (v18 or higher)
+- **Node.js 22.23.1** (the exact version used by CI)
 - Access to a running corsweb contact-chat Worker
 - **Google Calendar** with public iCal URL (optional)
 
@@ -57,11 +57,85 @@ npm install
 Create a `.env.local` file with the following variables:
 
 ```env
-VITE_CONTACT_API_BASE=https://your-contact-worker.example.com
+# Preview API contract; omit for same-origin local development.
+VITE_CONTACT_API_BASE=https://cor-contact-chat-preview.company-997.workers.dev
+VITE_TURNSTILE_SITE_KEY=your-public-turnstile-sitekey
+# Preview Grift public portal contract; exact HTTPS origins, no paths or wildcards.
+VITE_GRIFT_PUBLIC_URL_ORIGINS=https://preview---liff-pqvjbdrijq-an.a.run.app
+# Preview Cloudia embed-parent contract; this is the wrapper origin, not an API or portal origin.
+VITE_CLOUDIA_EMBED_PARENT_ORIGINS=https://cor-jp-main--pr281-ec0mrjn3.web.app
+# Preview/Staging provenance only; public identifiers, never credentials.
+VITE_CLOUDIA_CANDIDATE_SHA=0123456789abcdef0123456789abcdef01234567
+VITE_CLOUDIA_DEPLOYMENT_ID=cloudia-preview-20260714-001
+VITE_CLOUDIA_RELEASE_ID=cloudia-grift-uat-20260714-001
 GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 ```
 
 No Gemini or Vertex credential belongs in `.env.local`. Local Cloudia development calls the configured contact-chat Worker, or uses `VITE_CONTACT_CHAT_MOCK=1` for UI-only work.
+
+Keep the four public Preview build contracts separate:
+
+| Contract | Build variable | Preview meaning | Production behavior |
+|---|---|---|---|
+| Contact API origin | `VITE_CONTACT_API_BASE` | Exact corsweb Preview Worker API base | Ignored; `/api/contact/*` remains same-origin |
+| Grift public origin | `VITE_GRIFT_PUBLIC_URL_ORIGINS` | Exact tagged Grift portal origin accepted in handoff URLs | Ignored; pinned to `https://app.griftai.org` |
+| Cloudia parent origin | `VITE_CLOUDIA_EMBED_PARENT_ORIGINS` | Exact Firebase wrapper origin allowed for `cloudia:ready` and iframe handoff | Ignored; only `https://cor-jp.com` and `https://www.cor-jp.com` are parents |
+| Release metadata | `VITE_CLOUDIA_CANDIDATE_SHA`, `VITE_CLOUDIA_DEPLOYMENT_ID`, `VITE_CLOUDIA_RELEASE_ID` | Public provenance emitted to `/release.json` | Ignored; no `/release.json` is emitted |
+
+`VITE_CONTACT_API_BASE` is used only by non-production builds. Production mode
+forces it to an empty value so the deployed `/contact/chat/` app always calls
+corsweb's same-origin `/api/contact/*` routes, even if a Preview Pages variable
+is accidentally inherited by the production build.
+
+`VITE_TURNSTILE_SITE_KEY` is optional. When it is empty, Cloudia does not load
+Turnstile and preserves the existing form behavior. A Turnstile sitekey is a
+public browser identifier, not a secret. Never put `TURNSTILE_SECRET` (or any
+other server credential) in a `VITE_*` variable.
+
+`VITE_GRIFT_PUBLIC_URL_ORIGINS` is a required public build-time allowlist for
+the temporary Grift Preview/Staging portal. Vite production mode ignores this
+variable even when it remains set in the build environment and emits only
+`https://app.griftai.org`. A Preview build emits only the explicitly configured
+Preview origins: a missing, empty, malformed, production-only, or production-mixed
+value fails the build. Set the variable only on the Cloudia Preview build and use
+`npm run build:preview` (Vite `preview` mode) for that artifact. Use the normal
+`npm run build` for production. Set the allowlist to the exact tagged Grift origin
+returned by the staging release (comma-separated when more than one exact origin
+is required). Entries must be canonical HTTPS origins with no path, query,
+fragment, credentials, port alias, wildcard, case normalization, or alternate
+encoding. Local development keeps the production origin when the variable is
+omitted, while an explicit local value can exercise the isolated Preview portal.
+Both top-level navigation and the
+portal URL sent to the trusted Cor. iframe parent use this same allowlist and
+the exact `/chat/portal#exchange_code=<43-character base64url code>` contract.
+The code is a no-padding encoding of 32 random bytes and expires no more than
+five minutes after receipt. Cloudia validates and forwards the unchanged URL;
+it does not read, exchange, persist, or log the fragment credential.
+
+`VITE_CLOUDIA_EMBED_PARENT_ORIGINS` is a separate required Preview allowlist
+for the page embedding Cloudia. For the PR #281 Firebase wrapper, its exact
+value is `https://cor-jp-main--pr281-ec0mrjn3.web.app`. Do not put the Cloudia
+Pages URL, contact API origin, or Grift portal origin in this variable. Preview
+parents are ignored by a production build; the production direct mount keeps
+only the built-in `https://cor-jp.com` and `https://www.cor-jp.com` parents.
+
+`npm run build:preview` also requires the three public provenance identifiers
+shown above. The build fails closed unless `VITE_CLOUDIA_CANDIDATE_SHA` is a
+full 40-character lowercase commit SHA and the deployment/release identifiers
+match their bounded safe-character contracts. A successful Preview build emits
+the exact six-field `/release.json` readback used by the UAT runner:
+
+```json
+{"status":"ok","service":"cloudia","repository":"Cor-Incorporated/cloudia","candidate_sha":"0123456789abcdef0123456789abcdef01234567","deployment_id":"cloudia-preview-20260714-001","release_id":"cloudia-grift-uat-20260714-001"}
+```
+
+This file contains public deployment provenance only. Never place a token,
+secret, tenant ID, email address, URL credential, or customer data in these
+variables. Pages serves the file with `Cache-Control: no-store` and
+`X-Content-Type-Options: nosniff`. The `/release.json` rule in `public/_headers`
+explicitly detaches Pages' default `Access-Control-Allow-Origin` header, so the
+deployed response is not readable through browser CORS. Normal production
+builds ignore these variables and do not emit `release.json`.
 
 **Calendar Setup (Optional):**
 1. Open Google Calendar
@@ -84,12 +158,8 @@ npm run build
 
 The production build is mounted at `/contact/chat/`, so its CSS, JavaScript,
 favicon, and public assets are emitted with that prefix. Local development
-keeps the root (`/`) base path. Deploy the production artifact to the Pages
-`main` branch so the `cor-jp.com` edge route receives it:
-
-```bash
-npx wrangler pages deploy dist --project-name cloudia-contact --branch main
-```
+keeps the root (`/`) base path. Building only creates `dist/`; it does not
+publish to Cloudflare or any other external service.
 
 ### 6. Preview Production Build
 ```bash
@@ -147,6 +217,165 @@ src/
 
 The production contact experience is mounted on corsweb and calls the same-origin `/api/contact/*` Worker routes. `netlify.toml` remains only for the legacy calendar preview path; there is no Netlify AI function.
 
+### PR quality gate
+
+`.github/workflows/ci.yml` runs on pull requests to `main`, pushes to `main`,
+and manual dispatches. It uses Node.js 22.23.1, `npm ci`, and read-only
+repository permissions. The gate runs unit tests, the canonical-intent
+self-test, ADR intent parity, TypeScript, the production build, a non-deploying
+Preview artifact smoke build, production-only `npm audit`, and Chromium E2E.
+
+The workflow has no deploy step, environment, external credential, or secret
+reference. It uses `pull_request`, not `pull_request_target`, so fork pull
+requests do not need or receive deployment secrets. `actions/checkout` also
+leaves no credential in the checkout.
+
+To reproduce the gate locally with Node.js 22.23.1:
+
+```bash
+npm ci
+npm test
+npm run test:intents
+npm run typecheck
+npm run build
+env -i HOME="$HOME" PATH="$PATH" \
+  VITE_ROBOTS='noindex,nofollow' \
+  VITE_CONTACT_API_BASE='https://cor-contact-chat-preview.company-997.workers.dev' \
+  VITE_GRIFT_PUBLIC_URL_ORIGINS='https://preview---liff-pqvjbdrijq-an.a.run.app' \
+  VITE_CLOUDIA_EMBED_PARENT_ORIGINS='https://cor-jp-main--pr281-ec0mrjn3.web.app' \
+  VITE_CLOUDIA_CANDIDATE_SHA='0123456789abcdef0123456789abcdef01234567' \
+  VITE_CLOUDIA_DEPLOYMENT_ID='cloudia-preview-ci-smoke-001' \
+  VITE_CLOUDIA_RELEASE_ID='cloudia-ci-smoke-001' \
+  npm run build:preview
+npx --no-install playwright install chromium
+npm run test:e2e
+npm audit --omit=dev
+```
+
+CI caches npm's download cache using `package-lock.json`. It intentionally does
+not cache Playwright browser binaries: the E2E job installs only its locked
+Chromium plus Linux system dependencies with
+`npx --no-install playwright install --with-deps chromium`. This avoids stale browser/OS
+dependency combinations and follows Playwright's CI cache guidance.
+
+The production audit is the release gate. A full development audit can still
+report advisories from legacy Netlify/Vercel build tooling; those packages are
+not in the shipped production dependency graph and are reviewed separately.
+Do not use `npm audit fix --force` as part of a release because it can make
+unrelated major-version changes.
+
+### Turnstile code boundary and production blockers
+
+When `VITE_TURNSTILE_SITE_KEY` is configured, the contact form uses Cloudflare's
+official explicit-render API from the exact
+`https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit` URL. The
+submit button remains disabled until the callback supplies a valid token. The
+browser sends that ephemeral value only as `turnstileToken` to
+`POST /api/contact/submit`; it is not written to local/session storage, logs,
+URLs, email content, or the Grift handoff. The submit Worker must validate it
+server-side and discard it before any persistence, notification, or Grift
+payload is assembled.
+
+Cloudflare Pages/origin CSP must merge these sources into the existing policy
+before the sitekey is enabled:
+
+```text
+script-src ... https://challenges.cloudflare.com
+frame-src ... https://challenges.cloudflare.com
+connect-src ... 'self' <VITE_CONTACT_API_BASE origin, only when cross-origin>
+```
+
+For this standard no-pre-clearance widget, Cloudflare's Turnstile CSP contract
+adds `script-src` and `frame-src`; it does not require adding the Turnstile
+origin to the top page's `connect-src`. Keep `'self'` for Cloudia's same-origin
+contact API. If pre-clearance is enabled later, Cloudflare also requires
+`connect-src 'self'` for the site's `/cdn-cgi/` request. On Pages, apply the
+merged header through the deployed `_headers`/response-header configuration;
+do not replace unrelated existing CSP sources with the abbreviated example.
+
+Production is **not ready** from this frontend change alone. A trusted operator
+still has to create and hostname-restrict the external widget, add the public
+sitekey to the Pages build, configure the private `TURNSTILE_SECRET` only in the
+submit Worker, enforce Siteverify on every submit (including expected hostname
+and action `contact-submit`), deploy the CSP, finish the planned WAF/rate
+controls, and live-verify the result. Turnstile tokens are single-use and expire
+after five minutes, so every failed/completed submit must use a fresh token.
+
+Contract references: [explicit rendering and lifecycle](https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/),
+[widget configuration](https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/widget-configurations/),
+[server-side validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/),
+and [Turnstile CSP](https://developers.cloudflare.com/turnstile/reference/content-security-policy/).
+
+### Preview boundary and confirmation
+
+PR CI builds and inspects a synthetic Preview artifact but never deploys it.
+After both CI jobs pass, a trusted operator may build a noindex Preview and
+deploy it to a non-`main` Pages branch from an authenticated environment. Run
+the build from a clean reviewed checkout; the command is intentionally isolated
+from inherited shell variables and supplies every required public contract:
+
+<!-- cloudia-preview-build-contract:start -->
+```bash
+candidate_sha="$(git rev-parse HEAD)"
+candidate_short="$(git rev-parse --short=12 HEAD)"
+env -i HOME="$HOME" PATH="$PATH" \
+  VITE_ROBOTS='noindex,nofollow' \
+  VITE_CONTACT_API_BASE='https://cor-contact-chat-preview.company-997.workers.dev' \
+  VITE_GRIFT_PUBLIC_URL_ORIGINS='https://preview---liff-pqvjbdrijq-an.a.run.app' \
+  VITE_CLOUDIA_EMBED_PARENT_ORIGINS='https://cor-jp-main--pr281-ec0mrjn3.web.app' \
+  VITE_CLOUDIA_CANDIDATE_SHA="$candidate_sha" \
+  VITE_CLOUDIA_DEPLOYMENT_ID="cloudia-preview-$candidate_short" \
+  VITE_CLOUDIA_RELEASE_ID="cloudia-uat-$candidate_short" \
+  npm run build:preview
+npx wrangler pages deploy dist --project-name cloudia-contact --branch "<preview-branch>"
+```
+<!-- cloudia-preview-build-contract:end -->
+
+If the release lane assigns deployment or release identifiers externally,
+replace only those two example values with the assigned public IDs. Do not
+reuse the Firebase parent, Preview Worker, or Preview Grift values in a
+production build. To serve the already-built Preview artifact locally, retain
+the same public values and run `npx vite preview --mode preview`; plain
+`npm run preview` is for the production-mode artifact.
+
+Record the Preview URL and source commit, then confirm `/contact/chat/` loads,
+assets return 200, `/release.json` has the exact expected public identifiers and
+`no-store`/`nosniff` without CORS, the page is `noindex`, there are no browser console errors,
+and the four eligible intents complete the mocked/test-safe handoff paths. Do
+not enter real customer PII during Preview verification.
+
+After the Preview deployment, verify the effective response with a real `GET`
+(not only the build artifact). This gate must fail if CORS is present or either
+security/cache header is missing:
+
+```bash
+preview_url="https://<exact-cloudia-preview-host>"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+curl -fsS -D "$tmp_dir/headers" -o "$tmp_dir/release.json" "$preview_url/release.json"
+! grep -Eiq '^access-control-allow-origin:' "$tmp_dir/headers"
+grep -Eiq '^cache-control:[[:space:]]*no-store[[:space:]]*$' "$tmp_dir/headers"
+grep -Eiq '^x-content-type-options:[[:space:]]*nosniff[[:space:]]*$' "$tmp_dir/headers"
+```
+
+### Production boundary and confirmation
+
+Production is a separate, trusted main-linked release action. Only a clean,
+reviewed `main` commit whose push CI is green may be deployed to the Pages
+production branch. The authenticated release system or operator, outside this
+PR workflow, builds that exact commit and performs:
+
+```bash
+npx wrangler pages deploy dist --project-name cloudia-contact --branch main
+```
+
+After deployment, record the Cloudflare deployment ID and commit, then verify
+the public `/contact/chat/` route and prefixed assets, same-origin
+`/api/contact/chat` and `/api/contact/submit`, one Japanese and one English
+flow, all four Cloudia handoff-eligible intents, and the Worker-to-Grift
+outbound `contract-dev` boundary. A green PR or green `main` CI run is not
+evidence that Preview or production was deployed or live-verified.
+
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -182,6 +411,7 @@ For issues or questions:
 - Env:
   - `VITE_CONTACT_API_BASE` — e.g. empty for same-origin, or Preview Worker origin
   - `VITE_CONTACT_CHAT_MOCK=1` — mock chat/submit for local UI QA
-  - `VITE_FALLBACK_CONTACT_URL` — default `https://cor-jp.com/contact/`
+  - `VITE_FALLBACK_CONTACT_URL` — optional non-Cloudia fallback; default `mailto:cloudia@cor-jp.com` (`/contact` and `/contact/chat` are rejected to prevent loops)
+  - `VITE_TURNSTILE_SITE_KEY` — optional public sitekey; when unset, no widget/script is rendered
 - **Embed**: open with `?embed=1` for compact header (iframe /corsweb #254)
 - **LINE UI**: left Cloudia avatar + bubble, right user bubble; plain-text replies

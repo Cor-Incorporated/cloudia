@@ -4,7 +4,9 @@
  */
 import type { AppMode, ContactIntent } from '../types';
 import type { Locale } from '../translations';
-import { parseContactIntent } from '../constants/intents';
+import { isGriftHandoffIntent, parseContactIntent } from '../constants/intents';
+import { normalizeContactSource, normalizeLocale } from '../utils/launchContext';
+import { parseAllowedGriftHandoffUrl, parseValidGriftHandoffExpiry } from '../utils/griftHandoff';
 
 export type ChatRole = 'user' | 'assistant';
 
@@ -17,7 +19,6 @@ export type Classification = 'genuine' | 'sales' | 'spam';
 
 /** Non-PII fields collected by the Worker during structured intake. */
 export interface StructuredLead {
-  [key: string]: string | undefined;
   purpose?: string;
   industryRole?: string;
   dataSensitivity?: string;
@@ -46,7 +47,7 @@ export interface ContactChatContext {
   locale: Locale;
   intent: ContactIntent | null;
   sessionId?: string | null;
-  source?: 'cloudia';
+  source?: string;
 }
 
 export type ContactChatStartContext = ContactChatContext;
@@ -68,12 +69,77 @@ function normalizeChatContext(context: ContactChatContext): Required<ContactChat
     locale: context.locale === 'ja' ? 'ja' : 'en',
     intent: parseContactIntent(context.intent),
     sessionId: typeof context.sessionId === 'string' && context.sessionId.trim() ? context.sessionId.trim() : '',
-    source: 'cloudia',
+    source: normalizeContactSource(context.source),
   };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const STRUCTURED_LEAD_KEYS = [
+  'purpose',
+  'industryRole',
+  'dataSensitivity',
+  'stage',
+  'timingBudget',
+  'discoverySource',
+  'contactReason',
+] as const satisfies readonly (keyof StructuredLead)[];
+
+function normalizeStructuredLead(value: unknown): StructuredLead {
+  if (!isRecord(value)) return {};
+  const result: StructuredLead = {};
+  for (const key of STRUCTURED_LEAD_KEYS) {
+    const field = value[key];
+    if (typeof field !== 'string') continue;
+    const normalized = field.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ').trim().slice(0, 500);
+    if (normalized) result[key] = normalized;
+  }
+  return result;
+}
+
+const TRANSCRIPT_ROLE_LINE = /^(?:user|assistant|system|human|visitor|cloudia|ユーザー|あなた|訪問者|アシスタント|クラウディア)\s*(?:[:：]|[-—])\s*/i;
+
+function normalizeConfirmedSummaryText(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 8000) return '';
+  const lines = value.split(/\r?\n/);
+  if (lines.some((line) => TRANSCRIPT_ROLE_LINE.test(line.trim()))) return '';
+  return value;
+}
+
+function normalizeTurnstileToken(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const token = value.trim();
+  return token && token.length <= 2048 ? token : undefined;
+}
+
+function normalizeConversationSummaryForSubmit(
+  value: unknown,
+  locale: Locale,
+  intent: ContactIntent | null,
+  classification: Classification | '',
+  structuredLead: StructuredLead,
+): string | ConversationSummaryV1 {
+  if (typeof value === 'string') return normalizeConfirmedSummaryText(value);
+  if (!isRecord(value) || value.version !== 1) return '';
+  const text = normalizeConfirmedSummaryText(value.text);
+  if (!text.trim()) return '';
+  const stage = typeof value.stage === 'string' ? value.stage.trim().slice(0, 80) : '';
+  const summaryClassification: Classification = classification
+    || (value.classification === 'sales' || value.classification === 'spam' || value.classification === 'genuine'
+      ? value.classification
+      : 'genuine');
+  return {
+    version: 1,
+    locale,
+    intent,
+    classification: summaryClassification,
+    readyForContact: value.readyForContact === true,
+    ...(stage ? { stage } : {}),
+    ...(Object.keys(structuredLead).length > 0 ? { structuredLead } : {}),
+    text,
+  };
 }
 
 function parseChatResult(data: Record<string, unknown>, locale: Locale): ChatResult {
@@ -100,9 +166,8 @@ function parseChatResult(data: Record<string, unknown>, locale: Locale): ChatRes
     result.missingFields = data.missingFields.filter((value): value is string => typeof value === 'string').slice(0, 16);
   }
   if (isRecord(data.structuredLead)) {
-    result.structuredLead = Object.fromEntries(
-      Object.entries(data.structuredLead).filter(([, value]) => typeof value === 'string').slice(0, 8),
-    ) as StructuredLead;
+    const structuredLead = normalizeStructuredLead(data.structuredLead);
+    if (Object.keys(structuredLead).length > 0) result.structuredLead = structuredLead;
   }
   return result;
 }
@@ -114,23 +179,52 @@ export interface SubmitPayload {
   email: string;
   company?: string;
   message: string;
-  summaryText?: string;
+  summaryText?: string | ConversationSummaryV1;
   /** @deprecated compatibility alias; use summaryText. */
   conversationSummary?: string;
   /** Server-validated, non-PII intake fields carried into /submit. */
   structuredLead?: StructuredLead;
   classification?: Classification | '';
   intent?: ContactIntent | null;
+  locale?: Locale;
   source?: string;
+  handoffConsent?: GriftHandoffConsent;
   turnstileToken?: string;
   website?: string; // honeypot — always ''
 }
 
 export interface SubmitResult {
   ok: boolean;
+  /** HTTP response status; retained for existing callers. */
   status: number;
+  receiptId?: string;
+  deliveryStatus?: 'queued' | 'sent';
+  duplicate?: boolean;
+  handoff?: SubmitHandoff;
   body?: unknown;
 }
+
+export interface ConversationSummaryV1 {
+  version: 1;
+  locale: Locale;
+  intent: ContactIntent | null;
+  classification: Classification;
+  readyForContact: boolean;
+  stage?: string;
+  structuredLead?: StructuredLead;
+  text: string;
+}
+
+export interface GriftHandoffConsent {
+  accepted: true;
+  version: 'cloudia-grift-v1';
+  acceptedAt: string;
+  summaryConfirmed: true;
+}
+
+export type SubmitHandoff =
+  | { status: 'ready'; url: string; expiresAt: string }
+  | { status: 'fallback' };
 
 function apiBase(): string {
   const base = (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_CONTACT_API_BASE;
@@ -157,7 +251,46 @@ export function isContactChatMock(): boolean {
 
 export function getFallbackContactUrl(): string {
   const env = (import.meta as ImportMeta & { env?: Record<string, string> }).env;
-  return env?.VITE_FALLBACK_CONTACT_URL || 'https://cor-jp.com/contact/';
+  return normalizeFallbackContactUrl(env?.VITE_FALLBACK_CONTACT_URL);
+}
+
+const DEFAULT_FALLBACK_EMAIL = 'mailto:cloudia@cor-jp.com';
+
+function normalizedFallbackPath(pathname: string): string {
+  let decoded = pathname;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      break;
+    }
+  }
+  return decoded.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/\/+$/, '').toLowerCase() || '/';
+}
+
+export function normalizeFallbackContactUrl(value: unknown): string {
+  const configured = typeof value === 'string' ? value.trim() : '';
+  if (!configured || /[\r\n]/.test(configured) || /%0[ad]/i.test(configured)) return DEFAULT_FALLBACK_EMAIL;
+  try {
+    const url = new URL(configured);
+    if (url.protocol === 'mailto:') {
+      return !url.search
+        && !url.hash
+        && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(url.pathname)
+        ? url.toString()
+        : DEFAULT_FALLBACK_EMAIL;
+    }
+    if (url.protocol !== 'https:' || url.username || url.password) return DEFAULT_FALLBACK_EMAIL;
+    const host = url.hostname.toLowerCase();
+    const path = normalizedFallbackPath(url.pathname);
+    const loopsToCloudia = (host === 'cor-jp.com' || host === 'www.cor-jp.com')
+      && /^\/(?:(?:en|ja)\/)?contact(?:\/chat(?:\/.*)?)?$/.test(path);
+    return loopsToCloudia ? DEFAULT_FALLBACK_EMAIL : url.toString();
+  } catch {
+    return DEFAULT_FALLBACK_EMAIL;
+  }
 }
 
 /** 会話履歴を API messages 形式へ（system は送らない） */
@@ -171,15 +304,6 @@ export function toApiMessages(
       content: m.text.trim().slice(0, 2000),
     }))
     .slice(-20);
-}
-
-export function buildConversationSummary(
-  history: { sender: 'user' | 'ai'; text: string }[],
-  intent?: ContactIntent | null,
-): string {
-  const lines = history.map((m) => `${m.sender === 'user' ? 'User' : 'Cloudia'}: ${m.text}`);
-  const intentLine = intent ? `[intent:${intent}]\n` : '';
-  return (intentLine + lines.join('\n')).slice(0, 8000);
 }
 
 export async function postContactChat(
@@ -279,8 +403,27 @@ export async function postContactSubmit(
   payload: SubmitPayload,
   options: ContactChatRequestOptions = {},
 ): Promise<SubmitResult> {
+  const intent = parseContactIntent(payload.intent);
+  const locale = normalizeLocale(payload.locale, 'ja');
+  const source = normalizeContactSource(payload.source);
+  const structuredLead = normalizeStructuredLead(payload.structuredLead);
+  const classification = payload.classification === 'genuine'
+    || payload.classification === 'sales'
+    || payload.classification === 'spam'
+    ? payload.classification
+    : '';
+  const summaryText = normalizeConversationSummaryForSubmit(
+    payload.summaryText ?? payload.conversationSummary ?? '',
+    locale,
+    intent,
+    classification,
+    structuredLead,
+  );
+  const hasConfirmedSummary = typeof summaryText !== 'string';
+  const consent = normalizeGriftHandoffConsent(intent, payload.handoffConsent, hasConfirmedSummary);
+  const turnstileToken = normalizeTurnstileToken(payload.turnstileToken);
   // Worker 未対応の intent でも届くよう summary / message 先頭にも intent を埋め込む
-  const intentTag = payload.intent ? `[intent:${payload.intent}] ` : '';
+  const intentTag = intent ? `[intent:${intent}] ` : '';
   const body = {
     sessionId: payload.sessionId || undefined,
     idempotencyKey: payload.idempotencyKey,
@@ -289,19 +432,21 @@ export async function postContactSubmit(
     company: payload.company ?? '',
     message: intentTag + (payload.message || ''),
     // Worker側で検証済み要約として扱う。生トランスクリプトはここへ渡さない。
-    summaryText: payload.summaryText ?? payload.conversationSummary ?? '',
-    ...(payload.structuredLead && Object.keys(payload.structuredLead).length > 0
-      ? { structuredLead: payload.structuredLead }
+    summaryText,
+    ...(Object.keys(structuredLead).length > 0
+      ? { structuredLead }
       : {}),
-    classification: payload.classification ?? '',
-    intent: payload.intent ?? undefined,
-    source: payload.source ?? 'cloudia',
-    turnstileToken: payload.turnstileToken,
+    classification,
+    intent: intent ?? undefined,
+    locale,
+    source,
+    ...(consent ? { handoffConsent: consent } : {}),
+    ...(turnstileToken ? { turnstileToken } : {}),
     website: payload.website ?? '',
   };
 
   if (isContactChatMock()) {
-    return { ok: true, status: 200, body: { ok: true, mock: true } };
+    return parseSubmitResult({ ok: true, mock: true }, 200, Boolean(consent));
   }
 
   const res = await fetch(submitUrl(), {
@@ -319,5 +464,53 @@ export async function postContactSubmit(
   if (!res.ok) {
     throw new ContactChatUnavailableError();
   }
-  return { ok: true, status: res.status, body: parsed };
+  return parseSubmitResult(parsed, res.status, Boolean(consent));
+}
+
+function normalizeGriftHandoffConsent(
+  intent: ContactIntent | null,
+  consent: GriftHandoffConsent | undefined,
+  hasConfirmedSummary: boolean,
+): GriftHandoffConsent | undefined {
+  if (
+    !isGriftHandoffIntent(intent)
+    || !hasConfirmedSummary
+    || !consent?.accepted
+    || consent.version !== 'cloudia-grift-v1'
+    || consent.summaryConfirmed !== true
+  ) {
+    return undefined;
+  }
+  const acceptedAt = typeof consent.acceptedAt === 'string' ? consent.acceptedAt.trim() : '';
+  if (!acceptedAt || Number.isNaN(Date.parse(acceptedAt))) return undefined;
+  return {
+    accepted: true,
+    version: 'cloudia-grift-v1',
+    acceptedAt: new Date(acceptedAt).toISOString(),
+    summaryConfirmed: true,
+  };
+}
+
+function parseSubmitResult(data: unknown, httpStatus: number, handoffRequested: boolean): SubmitResult {
+  const result: SubmitResult = { ok: true, status: httpStatus, body: data };
+  if (!isRecord(data)) return result;
+  if (typeof data.receiptId === 'string' && data.receiptId.trim()) {
+    result.receiptId = data.receiptId.trim();
+  }
+  if (data.status === 'queued' || data.status === 'sent') result.deliveryStatus = data.status;
+  if (typeof data.duplicate === 'boolean') result.duplicate = data.duplicate;
+  if (handoffRequested && isRecord(data.handoff)) {
+    if (data.handoff.status === 'fallback') {
+      result.handoff = { status: 'fallback' };
+    } else if (data.handoff.status === 'ready') {
+      const url = parseAllowedGriftHandoffUrl(data.handoff.url);
+      const expiresAt = parseValidGriftHandoffExpiry(data.handoff.expiresAt);
+      if (!url || !expiresAt) {
+        result.handoff = { status: 'fallback' };
+      } else {
+        result.handoff = { status: 'ready', url, expiresAt };
+      }
+    }
+  }
+  return result;
 }

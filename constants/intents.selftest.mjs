@@ -11,6 +11,12 @@ const KEYS = [
   'contract-dev',
   'press-speaking-other',
 ];
+const GRIFT_HANDOFF_KEYS = [
+  'contract-dev',
+  'grift-team-beta',
+  'grift-paid-trial',
+  'estimate-audit',
+];
 
 function parseContactIntent(raw) {
   if (!raw) return null;
@@ -32,6 +38,8 @@ assert(KEYS.length === 7, '7 keys');
 assert(parseContactIntent('contract-dev') === 'contract-dev', 'accept contract-dev');
 assert(parseContactIntent('CONTRACT-DEV') === 'contract-dev', 'case insensitive');
 assert(parseContactIntent('local-llm-poc') === 'local-llm-poc', 'accept local-llm-poc');
+assert(GRIFT_HANDOFF_KEYS.every((key) => KEYS.includes(key)), 'accept all 4 Grift handoff intents');
+assert(!GRIFT_HANDOFF_KEYS.includes('local-llm-poc'), 'reject unrelated Grift handoff intent');
 assert(parseContactIntent('unknown-key') === null, 'reject unknown');
 assert(parseContactIntent('') === null, 'reject empty');
 assert(parseContactIntent(null) === null, 'reject null');

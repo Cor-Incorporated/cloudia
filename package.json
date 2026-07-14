@@ -10,9 +10,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:preview": "vite build --mode preview",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:intents": "node constants/intents.selftest.mjs"
+    "test": "vitest run --exclude 'e2e/**'",
+    "test:e2e": "playwright test",
+    "test:intents": "node constants/intents.selftest.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -21,10 +24,13 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
     "@netlify/functions": "^4.1.2",
+    "@playwright/test": "^1.53.1",
     "@types/node": "^22.14.0",
     "@vercel/node": "^5.2.1",
     "autoprefixer": "^10.4.21",
+    "playwright-core": "^1.53.1",
     "postcss": "^8.5.4",
     "tailwindcss": "^3.4.15",
     "typescript": "~5.7.2",

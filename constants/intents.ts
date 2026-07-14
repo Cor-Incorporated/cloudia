@@ -12,6 +12,13 @@ export const CONTACT_INTENT_KEYS: readonly ContactIntent[] = [
   'press-speaking-other',
 ] as const;
 
+export const GRIFT_HANDOFF_INTENTS = [
+  'contract-dev',
+  'grift-team-beta',
+  'grift-paid-trial',
+  'estimate-audit',
+] as const satisfies readonly ContactIntent[];
+
 export const CONTACT_INTENT_LABELS: Record<ContactIntent, Record<Locale, string>> = {
   'confidential-ai-assessment': {
     ja: '機密データAI活用診断',
@@ -124,7 +131,7 @@ export function getIntentDisplayLabel(intent: ContactIntent, locale: Locale): st
   return option?.label[locale] ?? getIntentLabel(intent, locale);
 }
 
-/** 人間対応（メール） vs 将来 Grift ハンドオフ。Phase 1 ではどちらも従来フロー。 */
-export function isContractDevHandoffIntent(intent: ContactIntent | null): boolean {
-  return intent === 'contract-dev';
+/** Browser eligibility only. Worker/Grift own outbound normalization and tenant routing. */
+export function isGriftHandoffIntent(intent: ContactIntent | null): boolean {
+  return intent !== null && (GRIFT_HANDOFF_INTENTS as readonly ContactIntent[]).includes(intent);
 }
