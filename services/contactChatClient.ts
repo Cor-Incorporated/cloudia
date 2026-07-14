@@ -15,6 +15,16 @@ export interface ContactChatMessage {
 
 export type Classification = 'genuine' | 'sales' | 'spam';
 
+/** Non-PII fields collected by the Worker during structured intake. */
+export interface StructuredLead {
+  [key: string]: string | undefined;
+  purpose?: string;
+  industryRole?: string;
+  dataSensitivity?: string;
+  stage?: string;
+  timingBudget?: string;
+}
+
 export interface ChatResult {
   reply: string;
   classification: Classification;
@@ -24,7 +34,7 @@ export interface ChatResult {
   summary?: string;
   faqResolution?: 'answered' | 'unresolved' | null;
   missingFields?: string[];
-  structuredLead?: Record<string, string>;
+  structuredLead?: StructuredLead;
 }
 
 export interface ContactChatContext {
@@ -88,7 +98,7 @@ function parseChatResult(data: Record<string, unknown>, locale: Locale): ChatRes
   if (isRecord(data.structuredLead)) {
     result.structuredLead = Object.fromEntries(
       Object.entries(data.structuredLead).filter(([, value]) => typeof value === 'string').slice(0, 8),
-    ) as Record<string, string>;
+    ) as StructuredLead;
   }
   return result;
 }
@@ -103,6 +113,8 @@ export interface SubmitPayload {
   summaryText?: string;
   /** @deprecated compatibility alias; use summaryText. */
   conversationSummary?: string;
+  /** Server-validated, non-PII intake fields carried into /submit. */
+  structuredLead?: StructuredLead;
   classification?: Classification | '';
   intent?: ContactIntent | null;
   source?: string;
@@ -274,6 +286,9 @@ export async function postContactSubmit(
     message: intentTag + (payload.message || ''),
     // Worker側で検証済み要約として扱う。生トランスクリプトはここへ渡さない。
     summaryText: payload.summaryText ?? payload.conversationSummary ?? '',
+    ...(payload.structuredLead && Object.keys(payload.structuredLead).length > 0
+      ? { structuredLead: payload.structuredLead }
+      : {}),
     classification: payload.classification ?? '',
     intent: payload.intent ?? undefined,
     source: payload.source ?? 'cloudia',

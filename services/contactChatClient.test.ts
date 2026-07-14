@@ -108,6 +108,31 @@ describe('contactChatClient', () => {
     });
   });
 
+  it('preserves the Worker structuredLead fields without exposing them in the chat text', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      reply: '業種を確認しました。',
+      classification: 'genuine',
+      readyForContact: false,
+      structuredLead: {
+        purpose: '業務システム開発',
+        industryRole: '製造 / 情シス',
+        stage: 'exploring',
+      },
+    }), { status: 200 })));
+
+    await expect(postContactChat([{ role: 'user', content: '業務システム開発を検討しています' }], {
+      mode: 'intake',
+      locale: 'ja',
+      intent: 'contract-dev',
+    })).resolves.toMatchObject({
+      structuredLead: {
+        purpose: '業務システム開発',
+        industryRole: '製造 / 情シス',
+        stage: 'exploring',
+      },
+    });
+  });
+
   it('does not expose a server response body through errors', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
       'secret upstream failure details',
@@ -228,6 +253,27 @@ describe('contactChatClient', () => {
       idempotencyKey: 'idempotency-123',
       message: '[intent:local-llm-poc] 相談内容',
       summaryText: '',
+    });
+  });
+
+  it('forwards structuredLead as non-PII submit metadata when available', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      receiptId: 'receipt-2',
+      status: 'queued',
+    }), { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: '相談内容',
+      structuredLead: { purpose: '業務システム開発', stage: 'exploring' },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      structuredLead: { purpose: '業務システム開発', stage: 'exploring' },
     });
   });
 });

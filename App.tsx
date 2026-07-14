@@ -18,6 +18,7 @@ import {
   postContactSubmit,
   toApiMessages,
   type Classification as ApiClassification,
+  type StructuredLead,
 } from './services/contactChatClient';
 
 // Classification re-export helper
@@ -93,6 +94,7 @@ const App: React.FC = () => {
   const [showHandoff, setShowHandoff] = useState(false);
   const [handoffDraft, setHandoffDraft] = useState<HandoffValues>(EMPTY_HANDOFF_VALUES);
   const [conversationSummary, setConversationSummary] = useState('');
+  const [structuredLead, setStructuredLead] = useState<StructuredLead>({});
   const [classification, setClassification] = useState<Classif>('genuine');
   const [apiDegraded, setApiDegraded] = useState(false);
   const [lastFailedInput, setLastFailedInput] = useState<string | null>(null);
@@ -114,6 +116,7 @@ const App: React.FC = () => {
     setShowHandoff(false);
     setHandoffDraft(EMPTY_HANDOFF_VALUES);
     setConversationSummary('');
+    setStructuredLead({});
     setSubmitted(false);
     setSessionId(readSessionId(appMode, locale, selectedIntent));
     idempotencyKeyRef.current = uuidv4();
@@ -196,6 +199,7 @@ const App: React.FC = () => {
         rememberSessionId(appMode, locale, intent, result.sessionId);
       }
       if (result.summary) setConversationSummary(result.summary);
+      if (result.structuredLead) setStructuredLead(result.structuredLead);
       setClassification(result.classification);
       setMessages((prev) => [
         ...prev,
@@ -290,6 +294,7 @@ const App: React.FC = () => {
         rememberSessionId(appMode, locale, selectedIntent, result.sessionId);
       }
       if (result.summary) setConversationSummary(result.summary);
+      if (result.structuredLead) setStructuredLead(result.structuredLead);
       setLastFailedInput(null);
       setApiDegraded(false);
       setClassification(result.classification);
@@ -355,6 +360,7 @@ const App: React.FC = () => {
     setShowHandoff(false);
     setHandoffDraft(EMPTY_HANDOFF_VALUES);
     setConversationSummary('');
+    setStructuredLead({});
     setClassification('genuine');
     setApiDegraded(false);
     setLastFailedInput(null);
@@ -386,6 +392,7 @@ const App: React.FC = () => {
         company: values.company,
         message: handoffMessage,
         summaryText: conversationSummary,
+        structuredLead,
         classification,
         intent: selectedIntent,
         source: 'cloudia',
@@ -419,7 +426,7 @@ const App: React.FC = () => {
       submitLockRef.current = false;
       finishRequest(controller);
     }
-  }, [beginRequest, conversationSummary, finishRequest, selectedIntent, classification, sessionId, submitted, t]);
+  }, [beginRequest, conversationSummary, finishRequest, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
 
   const displayEmotion = isLoading ? Emotion.THINKING : currentEmotion;
   const shellClass = embedMode
