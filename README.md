@@ -59,6 +59,8 @@ Create a `.env.local` file with the following variables:
 ```env
 VITE_CONTACT_API_BASE=https://your-contact-worker.example.com
 VITE_TURNSTILE_SITE_KEY=your-public-turnstile-sitekey
+# Preview/Staging build only; exact HTTPS origins, comma-separated, no paths or wildcards.
+VITE_GRIFT_PUBLIC_URL_ORIGINS=https://approved-grift-preview.example.run.app
 GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 ```
 
@@ -68,6 +70,20 @@ No Gemini or Vertex credential belongs in `.env.local`. Local Cloudia developmen
 Turnstile and preserves the existing form behavior. A Turnstile sitekey is a
 public browser identifier, not a secret. Never put `TURNSTILE_SECRET` (or any
 other server credential) in a `VITE_*` variable.
+
+`VITE_GRIFT_PUBLIC_URL_ORIGINS` is an optional, public build-time allowlist for
+the temporary Grift Preview/Staging portal. Vite production mode ignores this
+variable even when it remains set in the build environment. The production origin
+`https://app.griftai.org` is always allowed and is the only allowed origin when
+this variable is omitted. Set the variable only on the Cloudia Preview build and
+use `npm run build:preview` (Vite `preview` mode) for that artifact. Use the normal
+`npm run build` for production. Set the allowlist to
+the exact tagged Grift origin returned by the staging release (comma-separated
+when more than one exact origin is required). Entries must be HTTPS origins
+with no path, query, fragment, credentials, port alias, or wildcard. The
+production Cloudia build must leave it unset. Both top-level navigation and the
+portal URL sent to the trusted Cor. iframe parent use this same allowlist and
+the exact `/chat/portal/<8-512 character token>` contract.
 
 **Calendar Setup (Optional):**
 1. Open Google Calendar

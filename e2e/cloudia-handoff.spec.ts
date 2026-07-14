@@ -4,6 +4,12 @@ import { expect, test, type FrameLocator, type Page, type Route } from '@playwri
 const BASE_URL = 'http://127.0.0.1:4173';
 const PARENT_URL = `${BASE_URL}/e2e/embed-parent.html`;
 const PORTAL_URL = 'https://app.griftai.org/chat/portal/opaque-token_123.~';
+const PREVIEW_PORTAL_ORIGIN = 'https://grift-preview.example.run.app';
+const PREVIEW_PORTAL_URL = `${PREVIEW_PORTAL_ORIGIN}/chat/portal/preview-token_123.~`;
+const PREVIEW_ORIGIN_CONFIGURED = (process.env.VITE_GRIFT_PUBLIC_URL_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .includes(PREVIEW_PORTAL_ORIGIN);
 const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 const TURNSTILE_ENABLED = Boolean(process.env.VITE_TURNSTILE_SITE_KEY?.trim());
 const FAKE_TURNSTILE_API = String.raw`
@@ -293,11 +299,63 @@ test.describe('eligible Cloudia to Grift handoff', () => {
   });
 });
 
+test.describe('explicit Preview Grift origin allowlist', () => {
+  test.skip(!PREVIEW_ORIGIN_CONFIGURED, 'Preview origin is enabled only in the explicit Preview build');
+
+  test('posts an allowlisted Preview portal URL to the trusted embed parent', async ({ page }) => {
+    const expiresAt = futureExpiry();
+    const childUrl = `${BASE_URL}/?embed=1&intent=contract-dev&source=preview-uat&locale=ja`;
+    await page.route(PARENT_URL, async (route) => {
+      await route.fulfill({ contentType: 'text/html', body: embedParentMarkup(childUrl) });
+    });
+    await installReadyStart(page);
+    await page.route('**/api/contact/submit', async (route) => {
+      await fulfillJson(route, {
+        ok: true,
+        status: 'queued',
+        handoff: { status: 'ready', url: PREVIEW_PORTAL_URL, expiresAt },
+      });
+    });
+
+    await page.goto(PARENT_URL, { waitUntil: 'domcontentloaded' });
+    const cloudia = page.frameLocator('#cloudia');
+    await openHandoffForm(cloudia);
+    await fillHandoffForm(cloudia);
+    await cloudia.locator('button[type="submit"]').click();
+
+    await expect.poll(async () => page.evaluate(() => (
+      (window as typeof window & { __cloudiaMessages?: unknown[] }).__cloudiaMessages?.length ?? 0
+    ))).toBe(1);
+    const messages = await page.evaluate(() => (
+      (window as typeof window & { __cloudiaMessages?: unknown[] }).__cloudiaMessages ?? []
+    ));
+    expect(messages).toEqual([{
+      data: {
+        type: 'cloudia:grift-handoff-ready',
+        url: PREVIEW_PORTAL_URL,
+        expiresAt,
+      },
+      origin: BASE_URL,
+      sourceIsFrame: true,
+    }]);
+  });
+});
+
 test.describe('portal URL and expiry security', () => {
   const invalidHandoffs = [
     {
       name: 'untrusted origin',
       url: 'https://evil.example/chat/portal/opaque-token',
+      expiresAt: () => futureExpiry(),
+    },
+    ...(!PREVIEW_ORIGIN_CONFIGURED ? [{
+      name: 'unconfigured Preview origin',
+      url: PREVIEW_PORTAL_URL,
+      expiresAt: () => futureExpiry(),
+    }] : []),
+    {
+      name: 'portal token shorter than eight characters',
+      url: 'https://app.griftai.org/chat/portal/1234567',
       expiresAt: () => futureExpiry(),
     },
     {

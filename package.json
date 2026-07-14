@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:preview": "vite build --mode preview",
     "preview": "vite preview",
     "test": "vitest run --exclude 'e2e/**'",
     "test:e2e": "playwright test",

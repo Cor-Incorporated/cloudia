@@ -1,8 +1,9 @@
 export const GRIFT_HANDOFF_MESSAGE_TYPE = 'cloudia:grift-handoff-ready';
 export const GRIFT_MAX_PORTAL_TTL_MS = 24 * 60 * 60 * 1000;
 
-const GRIFT_PUBLIC_ORIGIN = 'https://app.griftai.org';
-const GRIFT_PORTAL_PATH = /^\/chat\/portal\/[A-Za-z0-9._~-]{1,512}$/;
+export const GRIFT_PRODUCTION_PUBLIC_ORIGIN = 'https://app.griftai.org';
+const GRIFT_PORTAL_PATH = /^\/chat\/portal\/[A-Za-z0-9._~-]{8,512}$/;
+const CONFIGURED_GRIFT_PUBLIC_URL_ORIGINS = import.meta.env.VITE_GRIFT_PUBLIC_URL_ORIGINS;
 const TRUSTED_EMBED_PARENT_ORIGINS = new Set([
   'https://cor-jp.com',
   'https://www.cor-jp.com',
@@ -26,11 +27,48 @@ export interface GriftHandoffBrowser extends GriftMessageTarget {
 
 export type GriftHandoffAction = 'navigated' | 'messaged' | 'blocked';
 
-export function parseAllowedGriftHandoffUrl(value: unknown): string | null {
+/**
+ * Build an exact HTTPS origin allowlist. Production is always present; a
+ * Preview/Staging build may append explicit origins through its public Vite
+ * build variable. Invalid entries and wildcard-like values are ignored.
+ */
+export function resolveAllowedGriftPublicOrigins(
+  configuredOrigins: unknown = CONFIGURED_GRIFT_PUBLIC_URL_ORIGINS,
+): ReadonlySet<string> {
+  const origins = new Set<string>([GRIFT_PRODUCTION_PUBLIC_ORIGIN]);
+  if (typeof configuredOrigins !== 'string') return origins;
+
+  for (const rawOrigin of configuredOrigins.split(',')) {
+    const candidate = rawOrigin.trim();
+    if (!candidate || candidate.includes('*')) continue;
+    try {
+      const url = new URL(candidate);
+      if (
+        url.protocol !== 'https:'
+        || url.username
+        || url.password
+        || url.port
+        || url.pathname !== '/'
+        || url.search
+        || url.hash
+        || candidate !== url.origin
+      ) continue;
+      origins.add(url.origin);
+    } catch {
+      // Fail closed: malformed configured entries never widen the allowlist.
+    }
+  }
+  return origins;
+}
+
+export function parseAllowedGriftHandoffUrl(
+  value: unknown,
+  configuredOrigins: unknown = CONFIGURED_GRIFT_PUBLIC_URL_ORIGINS,
+): string | null {
   if (typeof value !== 'string' || !value.trim() || value.length > 2048) return null;
   try {
     const url = new URL(value.trim());
-    if (url.origin !== GRIFT_PUBLIC_ORIGIN) return null;
+    if (!resolveAllowedGriftPublicOrigins(configuredOrigins).has(url.origin)) return null;
     if (url.protocol !== 'https:' || url.username || url.password) return null;
     if (!GRIFT_PORTAL_PATH.test(url.pathname)) return null;
     if (url.search || url.hash) return null;
@@ -72,8 +110,11 @@ export function openGriftHandoff(
   embed: boolean,
   browser: GriftHandoffBrowser = window,
   expiresAt?: string,
+  configuredOrigins: unknown = CONFIGURED_GRIFT_PUBLIC_URL_ORIGINS,
 ): GriftHandoffAction {
-  const url = parseAllowedGriftHandoffUrl(value);
+  // Both top-level navigation and the URL sent to an embedded parent cross the
+  // same exact-origin/path/token validation boundary.
+  const url = parseAllowedGriftHandoffUrl(value, configuredOrigins);
   const validExpiry = parseValidGriftHandoffExpiry(expiresAt);
   if (!url || !validExpiry) return 'blocked';
   const isFramed = browser.parent !== browser;
