@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ContactChatUnavailableError,
+  getFallbackContactUrl,
+  normalizeFallbackContactUrl,
   postContactChat,
   postContactChatStart,
   postContactSubmit,
   toApiMessages,
 } from './contactChatClient';
+
+const FUTURE_HANDOFF_EXPIRY = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -279,5 +283,377 @@ describe('contactChatClient', () => {
     expect(JSON.parse(String(init.body))).toMatchObject({
       structuredLead: { purpose: '業務システム開発', stage: 'exploring' },
     });
+  });
+
+  it('sends locale, normalized source, and explicit Grift consent for contract-dev', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      receiptId: 'receipt-grift',
+      status: 'queued',
+      handoff: {
+        status: 'ready',
+        url: 'https://app.griftai.org/chat/portal/opaque-token',
+        expiresAt: FUTURE_HANDOFF_EXPIRY,
+      },
+    }), { status: 202 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: '確認した補足',
+      summaryText: {
+        version: 1,
+        locale: 'ja',
+        intent: 'contract-dev',
+        classification: 'genuine',
+        readyForContact: true,
+        structuredLead: { purpose: '業務システム開発' },
+        text: '相談者が確認・編集した要約',
+      },
+      locale: 'ja',
+      intent: 'contract-dev',
+      source: ' Header-AI-Dev ',
+      handoffConsent: {
+        accepted: true,
+        version: 'cloudia-grift-v1',
+        acceptedAt: '2026-07-14T00:00:00.000Z',
+        summaryConfirmed: true,
+      },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      locale: 'ja',
+      source: 'header-ai-dev',
+      intent: 'contract-dev',
+      summaryText: {
+        version: 1,
+        locale: 'ja',
+        intent: 'contract-dev',
+        text: '相談者が確認・編集した要約',
+      },
+      handoffConsent: {
+        accepted: true,
+        version: 'cloudia-grift-v1',
+        acceptedAt: '2026-07-14T00:00:00.000Z',
+        summaryConfirmed: true,
+      },
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      status: 202,
+      receiptId: 'receipt-grift',
+      deliveryStatus: 'queued',
+      handoff: {
+        status: 'ready',
+        url: 'https://app.griftai.org/chat/portal/opaque-token',
+        expiresAt: FUTURE_HANDOFF_EXPIRY,
+      },
+    });
+  });
+
+  it.each([
+    'contract-dev',
+    'grift-team-beta',
+    'grift-paid-trial',
+    'estimate-audit',
+  ] as const)('keeps original %s intent/source and sends confirmed Grift consent', async (intent) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      handoff: {
+        status: 'ready',
+        url: 'https://app.griftai.org/chat/portal/eligible-token',
+        expiresAt: FUTURE_HANDOFF_EXPIRY,
+      },
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: 'Confirmed notes',
+      locale: 'en',
+      intent,
+      source: 'grift-lp',
+      summaryText: {
+        version: 1,
+        locale: 'en',
+        intent,
+        classification: 'genuine',
+        readyForContact: true,
+        text: 'Confirmed summary',
+      },
+      handoffConsent: {
+        accepted: true,
+        version: 'cloudia-grift-v1',
+        acceptedAt: '2026-07-14T00:00:00.000Z',
+        summaryConfirmed: true,
+      },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(body.intent).toBe(intent);
+    expect(body.source).toBe('grift-lp');
+    expect(body.summaryText.intent).toBe(intent);
+    expect(body.handoffConsent).toMatchObject({ accepted: true, summaryConfirmed: true });
+    expect(result.handoff).toMatchObject({ status: 'ready' });
+  });
+
+  it.each([
+    'confidential-ai-assessment',
+    'local-llm-poc',
+    'press-speaking-other',
+  ] as const)('never sends Grift consent or accepts a handoff for unrelated %s', async (intent) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      receiptId: 'receipt-email',
+      status: 'sent',
+      handoff: {
+        status: 'ready',
+        url: 'https://app.griftai.org/chat/portal/must-not-open',
+        expiresAt: FUTURE_HANDOFF_EXPIRY,
+      },
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: '相談内容',
+      locale: 'en',
+      intent,
+      source: 'cloudia',
+      summaryText: {
+        version: 1,
+        locale: 'en',
+        intent,
+        classification: 'genuine',
+        readyForContact: true,
+        text: 'Confirmed summary',
+      },
+      handoffConsent: {
+        accepted: true,
+        version: 'cloudia-grift-v1',
+        acceptedAt: '2026-07-14T00:00:00.000Z',
+        summaryConfirmed: true,
+      },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).not.toHaveProperty('handoffConsent');
+    expect(result).toMatchObject({
+      receiptId: 'receipt-email',
+      deliveryStatus: 'sent',
+    });
+    expect(result.handoff).toBeUndefined();
+  });
+
+  it('drops Grift consent unless the exact summary envelope was explicitly confirmed', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      handoff: {
+        status: 'ready',
+        url: 'https://app.griftai.org/chat/portal/must-not-open',
+        expiresAt: FUTURE_HANDOFF_EXPIRY,
+      },
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: '相談内容',
+      locale: 'ja',
+      intent: 'contract-dev',
+      summaryText: {
+        version: 1,
+        locale: 'ja',
+        intent: 'contract-dev',
+        classification: 'genuine',
+        readyForContact: true,
+        text: '確認済み要約',
+      },
+      handoffConsent: {
+        accepted: true,
+        version: 'cloudia-grift-v1',
+        acceptedAt: '2026-07-14T00:00:00.000Z',
+        summaryConfirmed: false,
+      } as unknown as Parameters<typeof postContactSubmit>[0]['handoffConsent'],
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).not.toHaveProperty('handoffConsent');
+    expect(result.handoff).toBeUndefined();
+  });
+
+  it('whitelists the confirmed summary envelope and never serializes a raw transcript field', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const rawTranscript = 'User: private raw turn\nCloudia: private raw reply';
+    const exactConfirmedSummary = '  The project purpose and timing were confirmed.  ';
+
+    await postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: '確認した補足',
+      locale: 'en',
+      intent: 'contract-dev',
+      classification: 'genuine',
+      structuredLead: {
+        purpose: 'Build a workflow system',
+        rawTranscript,
+      },
+      summaryText: {
+        version: 1,
+        locale: 'en',
+        intent: 'contract-dev',
+        classification: 'genuine',
+        readyForContact: true,
+        text: exactConfirmedSummary,
+        transcript: rawTranscript,
+      },
+      messages: [{ role: 'user', content: rawTranscript }],
+    } as Parameters<typeof postContactSubmit>[0] & Record<string, unknown>);
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+    expect(body).not.toHaveProperty('messages');
+    expect(body.summaryText).not.toHaveProperty('transcript');
+    expect(body.summaryText.text).toBe(exactConfirmedSummary);
+    expect(body.structuredLead).not.toHaveProperty('rawTranscript');
+    expect(JSON.stringify(body)).not.toContain(rawTranscript);
+  });
+
+  it('parses Grift fallback without turning a successful inquiry into an error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      receiptId: 'receipt-fallback',
+      status: 'queued',
+      handoff: { status: 'fallback' },
+    }), { status: 202 })));
+
+    await expect(postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: '相談内容',
+      locale: 'ja',
+      intent: 'contract-dev',
+      source: 'cloudia',
+      summaryText: {
+        version: 1,
+        locale: 'ja',
+        intent: 'contract-dev',
+        classification: 'genuine',
+        readyForContact: true,
+        text: '確認済み要約',
+      },
+      handoffConsent: {
+        accepted: true,
+        version: 'cloudia-grift-v1',
+        acceptedAt: '2026-07-14T00:00:00.000Z',
+        summaryConfirmed: true,
+      },
+    })).resolves.toMatchObject({
+      ok: true,
+      receiptId: 'receipt-fallback',
+      handoff: { status: 'fallback' },
+    });
+  });
+
+  it('keeps legacy submit responses compatible and rejects unsafe handoff URLs', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ok: true,
+        handoff: {
+          status: 'ready',
+          url: 'https://evil.example/chat/portal/token',
+          expiresAt: FUTURE_HANDOFF_EXPIRY,
+        },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ok: true,
+        handoff: { status: 'ready', url: 'https://app.griftai.org/chat/portal/token' },
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const payload = { name: 'Test User', email: 'test@example.com', message: '相談内容' };
+    const griftPayload = {
+      ...payload,
+      locale: 'ja' as const,
+      intent: 'contract-dev' as const,
+      summaryText: {
+        version: 1 as const,
+        locale: 'ja' as const,
+        intent: 'contract-dev' as const,
+        classification: 'genuine' as const,
+        readyForContact: true,
+        text: '確認済み要約',
+      },
+      handoffConsent: {
+        accepted: true as const,
+        version: 'cloudia-grift-v1' as const,
+        acceptedAt: '2026-07-14T00:00:00.000Z',
+        summaryConfirmed: true as const,
+      },
+    };
+
+    await expect(postContactSubmit(payload)).resolves.toMatchObject({ ok: true, status: 200 });
+    await expect(postContactSubmit(griftPayload)).resolves.toMatchObject({
+      ok: true,
+      handoff: { status: 'fallback' },
+    });
+    await expect(postContactSubmit(griftPayload)).resolves.toMatchObject({
+      ok: true,
+      handoff: { status: 'fallback' },
+    });
+  });
+
+  it('downgrades an expired handoff URL to email fallback', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      handoff: {
+        status: 'ready',
+        url: 'https://app.griftai.org/chat/portal/expired-token',
+        expiresAt: '2000-01-01T00:00:00.000Z',
+      },
+    }), { status: 200 })));
+
+    await expect(postContactSubmit({
+      name: 'Test User',
+      email: 'test@example.com',
+      message: '相談内容',
+      locale: 'ja',
+      intent: 'contract-dev',
+      summaryText: {
+        version: 1,
+        locale: 'ja',
+        intent: 'contract-dev',
+        classification: 'genuine',
+        readyForContact: true,
+        text: '確認済み要約',
+      },
+      handoffConsent: {
+        accepted: true,
+        version: 'cloudia-grift-v1',
+        acceptedAt: '2026-07-14T00:00:00.000Z',
+        summaryConfirmed: true,
+      },
+    })).resolves.toMatchObject({ handoff: { status: 'fallback' } });
+  });
+
+  it('uses an email fallback instead of a URL that loops back into Cloudia', () => {
+    expect(getFallbackContactUrl()).toBe('mailto:cloudia@cor-jp.com');
+    expect(normalizeFallbackContactUrl('https://cor-jp.com/contact/chat/?intent=contract-dev'))
+      .toBe('mailto:cloudia@cor-jp.com');
+    expect(normalizeFallbackContactUrl('https://www.cor-jp.com/contact/%63hat/'))
+      .toBe('mailto:cloudia@cor-jp.com');
+    expect(normalizeFallbackContactUrl('http://support.example.com/contact'))
+      .toBe('mailto:cloudia@cor-jp.com');
+    expect(normalizeFallbackContactUrl('mailto:attacker@example.com?body=%0AInjected'))
+      .toBe('mailto:cloudia@cor-jp.com');
+    expect(normalizeFallbackContactUrl('https://support.example.com/contact'))
+      .toBe('https://support.example.com/contact');
   });
 });

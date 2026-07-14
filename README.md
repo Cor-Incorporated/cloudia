@@ -42,7 +42,7 @@ A React TypeScript contact-reception experience with an eight-expression Cloudia
 
 ## 📋 Prerequisites
 
-- **Node.js** (v18 or higher)
+- **Node.js 22.23.1** (the exact version used by CI)
 - Access to a running corsweb contact-chat Worker
 - **Google Calendar** with public iCal URL (optional)
 
@@ -84,12 +84,8 @@ npm run build
 
 The production build is mounted at `/contact/chat/`, so its CSS, JavaScript,
 favicon, and public assets are emitted with that prefix. Local development
-keeps the root (`/`) base path. Deploy the production artifact to the Pages
-`main` branch so the `cor-jp.com` edge route receives it:
-
-```bash
-npx wrangler pages deploy dist --project-name cloudia-contact --branch main
-```
+keeps the root (`/`) base path. Building only creates `dist/`; it does not
+publish to Cloudflare or any other external service.
 
 ### 6. Preview Production Build
 ```bash
@@ -147,6 +143,78 @@ src/
 
 The production contact experience is mounted on corsweb and calls the same-origin `/api/contact/*` Worker routes. `netlify.toml` remains only for the legacy calendar preview path; there is no Netlify AI function.
 
+### PR quality gate
+
+`.github/workflows/ci.yml` runs on pull requests to `main`, pushes to `main`,
+and manual dispatches. It uses Node.js 22.23.1, `npm ci`, and read-only
+repository permissions. The gate runs unit tests, the canonical-intent
+self-test, ADR intent parity, TypeScript, the production build, production-only
+`npm audit`, and Chromium E2E.
+
+The workflow has no deploy step, environment, external credential, or secret
+reference. It uses `pull_request`, not `pull_request_target`, so fork pull
+requests do not need or receive deployment secrets. `actions/checkout` also
+leaves no credential in the checkout.
+
+To reproduce the gate locally with Node.js 22.23.1:
+
+```bash
+npm ci
+npm test
+npm run test:intents
+npm run typecheck
+npm run build
+npx --no-install playwright install chromium
+npm run test:e2e
+npm audit --omit=dev
+```
+
+CI caches npm's download cache using `package-lock.json`. It intentionally does
+not cache Playwright browser binaries: the E2E job installs only its locked
+Chromium plus Linux system dependencies with
+`npx --no-install playwright install --with-deps chromium`. This avoids stale browser/OS
+dependency combinations and follows Playwright's CI cache guidance.
+
+The production audit is the release gate. A full development audit can still
+report advisories from legacy Netlify/Vercel build tooling; those packages are
+not in the shipped production dependency graph and are reviewed separately.
+Do not use `npm audit fix --force` as part of a release because it can make
+unrelated major-version changes.
+
+### Preview boundary and confirmation
+
+PR CI never creates a Preview. After both CI jobs pass, a trusted operator may
+build a noindex Preview and deploy it to a non-`main` Pages branch from an
+authenticated environment:
+
+```bash
+VITE_ROBOTS=noindex,nofollow npm run build
+npx wrangler pages deploy dist --project-name cloudia-contact --branch "<preview-branch>"
+```
+
+Record the Preview URL and source commit, then confirm `/contact/chat/` loads,
+assets return 200, the page is `noindex`, there are no browser console errors,
+and the four eligible intents complete the mocked/test-safe handoff paths. Do
+not enter real customer PII during Preview verification.
+
+### Production boundary and confirmation
+
+Production is a separate, trusted main-linked release action. Only a clean,
+reviewed `main` commit whose push CI is green may be deployed to the Pages
+production branch. The authenticated release system or operator, outside this
+PR workflow, builds that exact commit and performs:
+
+```bash
+npx wrangler pages deploy dist --project-name cloudia-contact --branch main
+```
+
+After deployment, record the Cloudflare deployment ID and commit, then verify
+the public `/contact/chat/` route and prefixed assets, same-origin
+`/api/contact/chat` and `/api/contact/submit`, one Japanese and one English
+flow, all four Cloudia handoff-eligible intents, and the Worker-to-Grift
+outbound `contract-dev` boundary. A green PR or green `main` CI run is not
+evidence that Preview or production was deployed or live-verified.
+
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -182,6 +250,6 @@ For issues or questions:
 - Env:
   - `VITE_CONTACT_API_BASE` — e.g. empty for same-origin, or Preview Worker origin
   - `VITE_CONTACT_CHAT_MOCK=1` — mock chat/submit for local UI QA
-  - `VITE_FALLBACK_CONTACT_URL` — default `https://cor-jp.com/contact/`
+  - `VITE_FALLBACK_CONTACT_URL` — optional non-Cloudia fallback; default `mailto:cloudia@cor-jp.com` (`/contact` and `/contact/chat` are rejected to prevent loops)
 - **Embed**: open with `?embed=1` for compact header (iframe /corsweb #254)
 - **LINE UI**: left Cloudia avatar + bubble, right user bubble; plain-text replies

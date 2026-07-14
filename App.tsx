@@ -10,7 +10,16 @@ import FallbackNotice from './components/FallbackNotice';
 import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
-import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
+import { resolveLaunchContext } from './utils/launchContext';
+import { openGriftHandoff } from './utils/griftHandoff';
+import {
+  forgetSubmissionIdempotencyKey,
+  getOrCreateHandoffConsentAcceptedAt,
+  getOrCreateSubmissionIdempotencyKey,
+  releaseSubmissionLock,
+  tryAcquireSubmissionLock,
+} from './utils/submissionIdempotency';
+import { getIntentDisplayLabel, isGriftHandoffIntent } from './constants/intents';
 import {
   isContactChatMock,
   postContactChat,
@@ -29,6 +38,10 @@ const EMPTY_HANDOFF_VALUES: HandoffValues = {
   email: '',
   company: '',
   message: '',
+  summaryText: '',
+  summaryConfirmed: false,
+  privacyConsent: false,
+  griftHandoffConsent: false,
 };
 
 function sessionStorageKey(mode: AppMode, locale: string, intent: ContactIntent | null): string {
@@ -63,6 +76,27 @@ function forgetSessionId(mode: AppMode, locale: string, intent: ContactIntent | 
   }
 }
 
+function persistedSubmissionIdempotencyKey(
+  intent: ContactIntent | null,
+  sessionId: string | null,
+): string | null {
+  if (typeof window === 'undefined') return null;
+  return getOrCreateSubmissionIdempotencyKey(window.sessionStorage, intent, sessionId, uuidv4);
+}
+
+function persistedHandoffConsentAcceptedAt(
+  intent: ContactIntent | null,
+  sessionId: string | null,
+): string | null {
+  if (typeof window === 'undefined') return null;
+  return getOrCreateHandoffConsentAcceptedAt(
+    window.sessionStorage,
+    intent,
+    sessionId,
+    () => new Date().toISOString(),
+  );
+}
+
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
@@ -70,20 +104,20 @@ function isAbortError(error: unknown): boolean {
 const App: React.FC = () => {
   const { locale, setLocale, t } = useLanguage();
   const appMode: AppMode = useMemo(() => resolveAppMode(), []);
-  const embedMode = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).get('embed') === '1';
-  }, []);
+  const launchContext = useMemo(
+    () => resolveLaunchContext(typeof window === 'undefined' ? '' : window.location.search, locale),
+    [],
+  );
+  const embedMode = launchContext.embed;
+  const contactSource = launchContext.source;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentEmotion, setCurrentEmotion] = useState<Emotion>(Emotion.ENJOYING);
-  const [selectedIntent, setSelectedIntent] = useState<ContactIntent | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return parseContactIntent(new URLSearchParams(window.location.search).get('intent'));
-  });
+  const [selectedIntent, setSelectedIntent] = useState<ContactIntent | null>(launchContext.intent);
   const [sessionId, setSessionId] = useState<string | null>(() => readSessionId(appMode, locale, selectedIntent));
-  const idempotencyKeyRef = useRef(uuidv4());
+  const idempotencyKeyRef = useRef<string | null>(persistedSubmissionIdempotencyKey(selectedIntent, sessionId));
+  const handoffAcceptedAtRef = useRef<string | null>(null);
   const initialIntentFromUrlRef = useRef(selectedIntent);
   const autoStartPendingRef = useRef(Boolean(selectedIntent));
   const startAttemptRef = useRef<string | null>(null);
@@ -99,6 +133,7 @@ const App: React.FC = () => {
   const [apiDegraded, setApiDegraded] = useState(false);
   const [lastFailedInput, setLastFailedInput] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [handoffLink, setHandoffLink] = useState<string | null>(null);
   const [activeRequest, setActiveRequest] = useState<'start' | 'chat' | 'submit' | null>(null);
   const requestAbortRef = useRef<AbortController | null>(null);
   const submitLockRef = useRef(false);
@@ -118,8 +153,11 @@ const App: React.FC = () => {
     setConversationSummary('');
     setStructuredLead({});
     setSubmitted(false);
-    setSessionId(readSessionId(appMode, locale, selectedIntent));
-    idempotencyKeyRef.current = uuidv4();
+    setHandoffLink(null);
+    const restoredSessionId = readSessionId(appMode, locale, selectedIntent);
+    setSessionId(restoredSessionId);
+    idempotencyKeyRef.current = persistedSubmissionIdempotencyKey(selectedIntent, restoredSessionId);
+    handoffAcceptedAtRef.current = null;
     setIntentStartState('idle');
     startAttemptRef.current = null;
     if (initialIntentFromUrlRef.current) {
@@ -191,12 +229,14 @@ const App: React.FC = () => {
         locale,
         intent,
         sessionId: requestedSessionId,
-        source: 'cloudia',
+        source: contactSource,
       }, { signal: controller.signal });
       if (controller.signal.aborted) return;
       if (result.sessionId) {
         setSessionId(result.sessionId);
         rememberSessionId(appMode, locale, intent, result.sessionId);
+        idempotencyKeyRef.current = persistedSubmissionIdempotencyKey(intent, result.sessionId);
+        handoffAcceptedAtRef.current = null;
       }
       if (result.summary) setConversationSummary(result.summary);
       if (result.structuredLead) setStructuredLead(result.structuredLead);
@@ -224,11 +264,15 @@ const App: React.FC = () => {
     } finally {
       finishRequest(controller);
     }
-  }, [appMode, beginRequest, finishRequest, intentStartState, locale, sessionId]);
+  }, [appMode, beginRequest, contactSource, finishRequest, intentStartState, locale, sessionId]);
 
   const handleSelectIntent = useCallback((intent: ContactIntent) => {
     const requestedSessionId = selectedIntent === intent ? sessionId : null;
-    if (selectedIntent !== intent) setSessionId(null);
+    if (selectedIntent !== intent) {
+      setSessionId(null);
+      idempotencyKeyRef.current = null;
+      handoffAcceptedAtRef.current = null;
+    }
     setSelectedIntent(intent);
     autoStartPendingRef.current = false;
     if (typeof window !== 'undefined') {
@@ -286,12 +330,14 @@ const App: React.FC = () => {
         locale,
         intent: selectedIntent,
         sessionId,
-        source: 'cloudia',
+        source: contactSource,
       }, { signal: controller.signal });
       if (controller.signal.aborted) return;
       if (result.sessionId) {
         setSessionId(result.sessionId);
         rememberSessionId(appMode, locale, selectedIntent, result.sessionId);
+        idempotencyKeyRef.current = persistedSubmissionIdempotencyKey(selectedIntent, result.sessionId);
+        handoffAcceptedAtRef.current = null;
       }
       if (result.summary) setConversationSummary(result.summary);
       if (result.structuredLead) setStructuredLead(result.structuredLead);
@@ -323,7 +369,7 @@ const App: React.FC = () => {
     } finally {
       finishRequest(controller);
     }
-  }, [beginRequest, chatReady, finishRequest, messages, locale, t, appMode, selectedIntent, submitted, sessionId]);
+  }, [beginRequest, chatReady, contactSource, finishRequest, messages, locale, t, appMode, selectedIntent, submitted, sessionId]);
 
   const handleRetryChat = useCallback(() => {
     if (lastFailedInput) void handleSendMessage(lastFailedInput, true);
@@ -346,6 +392,9 @@ const App: React.FC = () => {
     }
 
     handleStopRequest();
+    if (typeof window !== 'undefined') {
+      forgetSubmissionIdempotencyKey(window.sessionStorage, selectedIntent, sessionId);
+    }
     forgetSessionId(appMode, locale, selectedIntent);
     setSelectedIntent(null);
     setSessionId(null);
@@ -365,50 +414,102 @@ const App: React.FC = () => {
     setApiDegraded(false);
     setLastFailedInput(null);
     setSubmitted(false);
+    setHandoffLink(null);
     setIntentStartState('idle');
     startAttemptRef.current = null;
     initialIntentFromUrlRef.current = null;
     autoStartPendingRef.current = false;
-    idempotencyKeyRef.current = uuidv4();
-    submitLockRef.current = false;
+    idempotencyKeyRef.current = null;
+    handoffAcceptedAtRef.current = null;
+    releaseSubmissionLock(submitLockRef);
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       url.searchParams.delete('intent');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [appMode, handleStopRequest, locale, messages.length, selectedIntent, submitted, t]);
+  }, [appMode, handleStopRequest, locale, messages.length, selectedIntent, sessionId, submitted, t]);
+
+  const handleShowHandoff = useCallback(() => {
+    setHandoffDraft((previous) => previous.summaryText.trim()
+      ? previous
+      : { ...previous, summaryText: conversationSummary.trim() });
+    setShowHandoff(true);
+  }, [conversationSummary]);
 
   const handleHandoff = useCallback(async (values: HandoffValues) => {
-    if (submitLockRef.current || submitted) return;
-    submitLockRef.current = true;
+    if (submitted || !tryAcquireSubmissionLock(submitLockRef)) return;
     const controller = beginRequest('submit');
-    const handoffMessage = values.message.trim() || conversationSummary.trim() || t('handoffDefaultMessage');
+    const handoffMessage = values.message.trim() || t('handoffDefaultMessage');
+    const requestsGriftHandoff = isGriftHandoffIntent(selectedIntent)
+      && values.summaryConfirmed
+      && values.griftHandoffConsent;
+    const idempotencyKey = persistedSubmissionIdempotencyKey(selectedIntent, sessionId)
+      ?? idempotencyKeyRef.current
+      ?? uuidv4();
+    idempotencyKeyRef.current = idempotencyKey;
+    const handoffAcceptedAt = requestsGriftHandoff
+      ? persistedHandoffConsentAcceptedAt(selectedIntent, sessionId)
+        ?? handoffAcceptedAtRef.current
+        ?? new Date().toISOString()
+      : null;
+    handoffAcceptedAtRef.current = handoffAcceptedAt;
+    let submissionAccepted = false;
     try {
-      await postContactSubmit({
+      const result = await postContactSubmit({
         sessionId,
-        idempotencyKey: idempotencyKeyRef.current,
+        idempotencyKey,
         name: values.name,
         email: values.email,
         company: values.company,
         message: handoffMessage,
-        summaryText: conversationSummary,
+        summaryText: {
+          version: 1,
+          locale,
+          intent: selectedIntent,
+          classification,
+          readyForContact: true,
+          structuredLead,
+          text: values.summaryText,
+        },
         structuredLead,
         classification,
         intent: selectedIntent,
-        source: 'cloudia',
+        locale,
+        source: contactSource,
+        ...(requestsGriftHandoff ? {
+          handoffConsent: {
+            accepted: true as const,
+            version: 'cloudia-grift-v1' as const,
+            acceptedAt: handoffAcceptedAt as string,
+            summaryConfirmed: true as const,
+          },
+        } : {}),
         website: '',
       }, { signal: controller.signal });
       if (controller.signal.aborted) return;
+      const readyHandoff = requestsGriftHandoff && result.handoff?.status === 'ready'
+        ? result.handoff
+        : null;
+      const successMessage = requestsGriftHandoff
+        ? readyHandoff
+          ? t('handoffEmbedReady')
+          : t('handoffEmailFallback')
+        : t('handoffSuccess');
       setLastFailedInput(null);
       setHandoffDraft(EMPTY_HANDOFF_VALUES);
       setSubmitted(true);
       setShowHandoff(false);
+      setHandoffLink(readyHandoff?.url ?? null);
       setMessages((prev) => [
         ...prev,
-        { id: uuidv4(), text: t('handoffSuccess'), sender: 'ai', emotion: Emotion.HAPPY },
+        { id: uuidv4(), text: successMessage, sender: 'ai', emotion: Emotion.HAPPY },
       ]);
       setCurrentEmotion(Emotion.HAPPY);
       setApiDegraded(false);
+      submissionAccepted = true;
+      if (readyHandoff) {
+        openGriftHandoff(readyHandoff.url, embedMode, window, readyHandoff.expiresAt);
+      }
     } catch (error) {
       if (controller.signal.aborted || isAbortError(error)) return;
       setApiDegraded(true);
@@ -423,10 +524,10 @@ const App: React.FC = () => {
       ]);
       setCurrentEmotion(Emotion.SAD);
     } finally {
-      submitLockRef.current = false;
+      if (!submissionAccepted) releaseSubmissionLock(submitLockRef);
       finishRequest(controller);
     }
-  }, [beginRequest, conversationSummary, finishRequest, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
+  }, [beginRequest, classification, contactSource, embedMode, finishRequest, locale, selectedIntent, sessionId, structuredLead, submitted, t]);
 
   const displayEmotion = isLoading ? Emotion.THINKING : currentEmotion;
   const shellClass = embedMode
@@ -465,6 +566,8 @@ const App: React.FC = () => {
             <button
               type="button"
               onClick={() => setLocale('en')}
+              aria-pressed={locale === 'en'}
+              lang="en"
               className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${locale === 'en' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               English
@@ -472,6 +575,8 @@ const App: React.FC = () => {
             <button
               type="button"
               onClick={() => setLocale('ja')}
+              aria-pressed={locale === 'ja'}
+              lang="ja"
               className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${locale === 'ja' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               日本語
@@ -522,6 +627,7 @@ const App: React.FC = () => {
             aria-relevant="additions"
             aria-busy={isLoading}
             role="log"
+            tabIndex={0}
           >
             {messages.map((msg, index) => (
               <React.Fragment key={msg.id}>
@@ -540,7 +646,7 @@ const App: React.FC = () => {
                   </div>
                 )}
                 {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState === 'started' && selectedIntent && (
-                  <p className="ml-10 mt-0.5 max-w-2xl text-xs text-slate-500" role="status">
+                  <p className="ml-10 mt-0.5 max-w-2xl text-xs text-slate-600" role="status">
                     {t('intentSelected', { label: getIntentDisplayLabel(selectedIntent, locale) })}
                   </p>
                 )}
@@ -561,7 +667,7 @@ const App: React.FC = () => {
                 <button
                   type="button"
                   className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                  onClick={() => setShowHandoff(true)}
+                  onClick={handleShowHandoff}
                 >
                   {t('showHandoff')}
                 </button>
@@ -584,11 +690,22 @@ const App: React.FC = () => {
               onBack={() => setShowHandoff(false)}
               onCancel={handleStartNewConversation}
               onSubmit={handleHandoff}
+              offersGriftHandoff={isGriftHandoffIntent(selectedIntent)}
             />
           )}
 
           {submitted && (
-            <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
+            <div className="safe-area-pad-bottom flex shrink-0 flex-col gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center">
+              {handoffLink && (
+                <a
+                  href={handoffLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+                >
+                  {t('openGriftFallback')}
+                </a>
+              )}
               <button
                 type="button"
                 className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
@@ -600,7 +717,7 @@ const App: React.FC = () => {
           )}
 
           {!showHandoff && !submitted && (
-            <div className="sticky bottom-0 shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4">
+            <div className="safe-area-pad-bottom sticky bottom-0 shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4">
               <ChatInput
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}

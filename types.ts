@@ -26,8 +26,8 @@ export enum Emotion {
 export type AppMode = 'intake' | 'ambassador';
 
 /**
- * corsweb ADR-0014 正本 intent 7 キー
- * contract-dev のみ Phase 3 で Grift 自動ハンドオフ。Phase 1 はキー受理 + 従来フロー。
+ * corsweb ADR-0014 正本 intent 7 キー。Grift handoff eligibility は
+ * constants/intents.ts に集約し、元の intent は Worker まで保持する。
  */
 export type ContactIntent =
   | 'confidential-ai-assessment'

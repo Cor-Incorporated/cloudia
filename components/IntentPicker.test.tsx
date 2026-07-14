@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import IntentPicker from './IntentPicker';
+import IntentPicker, { resolveIntentSelection } from './IntentPicker';
+import { CONTACT_INTENT_DISPLAY_OPTIONS } from '../constants/intents';
 import { LanguageProvider } from '../contexts/LanguageContext';
 
 function renderPicker(selected: 'local-llm-poc' | 'grift-paid-trial' | null = null): string {
@@ -52,5 +53,18 @@ describe('IntentPicker', () => {
     expect(markup).toContain('AI見積もりシステムについて');
     expect((markup.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
     expect((markup.match(/aria-pressed="false"/g) ?? []).length).toBe(4);
+  });
+
+  it.each([
+    'grift-team-beta',
+    'grift-paid-trial',
+    'estimate-audit',
+  ] as const)('preserves the original Grift LP intent %s when its selected group is pressed', (intent) => {
+    const option = CONTACT_INTENT_DISPLAY_OPTIONS.find((candidate) => candidate.id === 'ai-estimate-system');
+    if (!option) throw new Error('estimate-system option missing');
+
+    expect(resolveIntentSelection(option, intent)).toBe(intent);
+    expect(resolveIntentSelection(option, null)).toBe('estimate-audit');
+    expect(resolveIntentSelection(option, intent)).not.toBe('contract-dev');
   });
 });

@@ -28,7 +28,7 @@ const FallbackNotice: React.FC<FallbackNoticeProps> = ({ visible, onRetry }) => 
             {t('retry')}
           </button>
         )}
-        <a href={href} className="text-blue-700 underline underline-offset-2 hover:text-blue-900" rel="noopener noreferrer">
+        <a href={href} className="text-blue-700 underline underline-offset-2 hover:text-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700" rel="noopener noreferrer">
           {t('fallbackLink')}
         </a>
       </div>

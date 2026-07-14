@@ -10,6 +10,15 @@ interface IntentPickerProps {
   describedBy?: string;
 }
 
+export function resolveIntentSelection(
+  option: (typeof CONTACT_INTENT_DISPLAY_OPTIONS)[number],
+  selected: ContactIntent | null,
+): ContactIntent {
+  return selected && option.intents.some((intent) => intent === selected)
+    ? selected
+    : option.primaryIntent;
+}
+
 const IntentPicker: React.FC<IntentPickerProps> = ({ selected, onSelect, disabled, describedBy }) => {
   const { locale, t } = useLanguage();
 
@@ -24,7 +33,7 @@ const IntentPicker: React.FC<IntentPickerProps> = ({ selected, onSelect, disable
               key={option.id}
               type="button"
               disabled={disabled}
-              onClick={() => onSelect(option.primaryIntent)}
+              onClick={() => onSelect(resolveIntentSelection(option, selected))}
               className={[
                 'min-h-11 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
                 isSelected

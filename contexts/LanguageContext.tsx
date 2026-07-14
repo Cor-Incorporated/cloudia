@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { translations, Locale } from '../translations';
+import { normalizeLocale, resolveLaunchContext, syncHtmlLang } from '../utils/launchContext';
 
 interface LanguageContextType {
   locale: Locale;
@@ -12,25 +13,19 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   // Attempt to get language from localStorage or default to browser language or 'en'
   const getInitialLocale = (): Locale => {
-    const queryLocale = new URLSearchParams(window.location.search).get('locale');
-    if (queryLocale === 'ja' || queryLocale === 'en') {
-      return queryLocale;
-    }
-    const storedLocale = localStorage.getItem('app-locale') as Locale;
-    if (storedLocale && translations[storedLocale]) {
-      return storedLocale;
-    }
-    const browserLang = navigator.language.split('-')[0] as Locale;
-    if (translations[browserLang]) {
-      return browserLang;
-    }
-    return 'en';
+    const browserLocale = normalizeLocale(navigator.language.split('-')[0], 'en');
+    const storedLocale = normalizeLocale(localStorage.getItem('app-locale'), browserLocale);
+    return resolveLaunchContext(window.location.search, storedLocale).locale;
   };
 
   const [locale, setLocaleState] = useState<Locale>(getInitialLocale());
 
   useEffect(() => {
     localStorage.setItem('app-locale', locale);
+    syncHtmlLang(document.documentElement, locale);
+    const url = new URL(window.location.href);
+    url.searchParams.set('locale', locale);
+    window.history.replaceState({}, '', url.toString());
   }, [locale]);
 
   const setLocale = (newLocale: Locale) => {

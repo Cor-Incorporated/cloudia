@@ -21,6 +21,7 @@
 | [ADR-0005](./ADR-0005-stack-cloudia-not-chatwoot.md) | スタック選定（Chatwoot 不採用） | Accepted 2026-07-10 |
 | [ADR-0006](./ADR-0006-security-and-spam-layers.md) | セキュリティと spam レイヤ | Accepted 2026-07-10 |
 | [ADR-0007](./ADR-0007-phased-delivery.md) | Phase 1–3 デリバリー | Accepted 2026-07-10 |
+| [ADR-0008](./ADR-0008-cross-repo-canon-reference.md) | クロスリポジトリ契約の正本参照（Cloudia 4 intent / outbound `contract-dev` 境界） | Accepted / Revised 2026-07-14 |
 
 ## 要件との対応
 
@@ -28,12 +29,12 @@
 |---|---|---|
 | Phase 1 最小実用 | 0001–0003, 0005–0007 | Issue #2 |
 | org 移管・CF | 0002, 0004 | #9, #10 |
-| Phase 2+ | 0007 | #11, #12 |
+| Phase 2+ | 0007, 0008 | #11, #12, #25 |
 
 要件要約: [../requirements/AI-CONTACT-RECEPTION.md](../requirements/AI-CONTACT-RECEPTION.md)
 
 ## 参照
 
-- corsweb ADR-0005 / ADR-0010 / ADR-0012
+- corsweb ADR-0005 / ADR-0010 / ADR-0012 / ADR-0016
 - corsweb Issues: #59, #243, #250, #254, #255
 - 監査資料 `Cor_Grift_サイト刷新提案_2026-07-10.md` §6
