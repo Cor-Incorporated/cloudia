@@ -64,6 +64,26 @@ jobs:
       - name: Build production bundle
         run: npm run build
 
+      - name: Build and verify Preview bundle without deploying
+        shell: bash
+        env:
+          VITE_ROBOTS: noindex,nofollow
+          VITE_CONTACT_API_BASE: https://contact-preview.example.workers.dev
+          VITE_GRIFT_PUBLIC_URL_ORIGINS: https://grift-preview.example.run.app
+          VITE_CLOUDIA_EMBED_PARENT_ORIGINS: https://cor-jp-main--pr281-ec0mrjn3.web.app
+          VITE_CLOUDIA_CANDIDATE_SHA: 0123456789abcdef0123456789abcdef01234567
+          VITE_CLOUDIA_DEPLOYMENT_ID: cloudia-preview-ci-smoke-001
+          VITE_CLOUDIA_RELEASE_ID: cloudia-ci-smoke-001
+        run: |
+          set -euo pipefail
+          npm run build:preview
+          grep -Fqx -- "  Content-Security-Policy: frame-ancestors 'self' https://cor-jp.com https://www.cor-jp.com https://cor-jp-main--pr281-ec0mrjn3.web.app" dist/_headers
+          grep -Fqx -- '  Cache-Control: no-store' dist/_headers
+          grep -Fqx -- '  X-Content-Type-Options: nosniff' dist/_headers
+          expected_release='{"status":"ok","service":"cloudia","repository":"Cor-Incorporated/cloudia","candidate_sha":"0123456789abcdef0123456789abcdef01234567","deployment_id":"cloudia-preview-ci-smoke-001","release_id":"cloudia-ci-smoke-001"}'
+          test "$(cat dist/release.json)" = "$expected_release"
+          grep -Fq -- '<meta name="robots" content="noindex,nofollow">' dist/index.html
+
       - name: Audit production dependencies
         run: npm audit --omit=dev
 

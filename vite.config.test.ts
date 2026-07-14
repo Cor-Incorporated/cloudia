@@ -15,8 +15,39 @@ const validPreviewReleaseEnv = Object.freeze({
   VITE_CLOUDIA_RELEASE_ID: 'cloudia-grift-uat-20260714-001',
 });
 
+const exactPreviewBuildContracts = Object.freeze([
+  ['VITE_CONTACT_API_BASE', 'https://cor-contact-chat-preview.company-997.workers.dev'],
+  ['VITE_GRIFT_PUBLIC_URL_ORIGINS', 'https://preview---liff-pqvjbdrijq-an.a.run.app'],
+  ['VITE_CLOUDIA_EMBED_PARENT_ORIGINS', 'https://cor-jp-main--pr281-ec0mrjn3.web.app'],
+] as const);
+
+describe('Preview runbook build contract', () => {
+  const readme = readFileSync(new URL('./README.md', import.meta.url), 'utf8');
+  const previewCommand = readme.match(
+    /<!-- cloudia-preview-build-contract:start -->\s*```bash\n([\s\S]*?)\n```\s*<!-- cloudia-preview-build-contract:end -->/,
+  )?.[1];
+
+  it('keeps the trusted-operator command isolated and discoverable', () => {
+    expect(previewCommand).toBeDefined();
+    expect(previewCommand).toContain('env -i HOME="$HOME" PATH="$PATH"');
+    expect(previewCommand).toContain('npm run build:preview');
+  });
+
+  it.each(exactPreviewBuildContracts)('keeps %s separate and exact', (name, value) => {
+    expect(previewCommand).toContain(`${name}='${value}'`);
+  });
+
+  it.each([
+    'VITE_CLOUDIA_CANDIDATE_SHA',
+    'VITE_CLOUDIA_DEPLOYMENT_ID',
+    'VITE_CLOUDIA_RELEASE_ID',
+  ])('keeps required release metadata assignment %s', (name) => {
+    expect(previewCommand).toContain(`${name}=`);
+  });
+});
+
 describe('Cloudia embed parent origin build boundary', () => {
-  const firebasePreviewOrigin = 'https://cor-jp-main--preview-abc123.web.app';
+  const firebasePreviewOrigin = 'https://cor-jp-main--pr281-ec0mrjn3.web.app';
 
   it('drops Firebase Preview parents from production even when CI carries the variable', () => {
     expect(resolveCloudiaEmbedParentOriginsForBuild('production', firebasePreviewOrigin)).toBe('');
