@@ -2,7 +2,7 @@ export const translations = {
   en: {
     title: "Cloudia — Cor. AI Reception",
     welcomeMessage:
-      "Hello. I'm Cloudia, the AI receptionist for Cor. I'll organize your inquiry in about 5–7 questions and hand it off to our team. Please do not enter confidential information such as customer names, personal data, or contract text. First, choose the purpose of your inquiry.",
+      "Hello. I'm Cloudia, the AI receptionist for Cor. I'll ask a few questions to organize your inquiry and hand it off to our team. Please do not enter confidential information such as customer names, personal data, or contract text. First, choose the purpose of your inquiry.",
     welcomeMessageAmbassador:
       "Hello, I'm Cloudia from Cor. This is the casual conversation mode. Please feel free to ask about our company and technology. If your topic becomes a concrete project inquiry, I can also guide you to our contact form.",
     piiNotice:
@@ -55,7 +55,7 @@ export const translations = {
   ja: {
     title: "Cloudia — Cor. AI受付",
     welcomeMessage:
-      "こんにちは。Cor.のAI受付 Cloudiaです。5〜7問でご相談内容を整理し、担当者へ引き継ぎます。顧客名、個人情報、契約書本文などの機密情報は入力しないでください。まず、ご相談の目的を選んでください。",
+      "こんにちは。Cor.のAI受付 Cloudiaです。いくつか質問しながらご相談内容を整理し、担当者へ引き継ぎます。顧客名、個人情報、契約書本文などの機密情報は入力しないでください。まず、ご相談の目的を選んでください。",
     welcomeMessageAmbassador:
       "こんにちは。Cor.のCloudiaです。こちらは雑談モードです。会社やAI技術についてご質問があればお聞かせください。具体的なご相談になった場合は、受付モードへご案内します。",
     piiNotice:
