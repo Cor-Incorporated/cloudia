@@ -1,6 +1,6 @@
 # ADR-0003 contact-chat API 契約（corsweb）
 
-## ステータス: Accepted (2026-07-10) / Revised (2026-07-10)
+## ステータス: Accepted (2026-07-10) / Revised (2026-07-15)
 
 ## 背景
 
@@ -26,6 +26,8 @@ corsweb `workers/contact-chat`（本番は同一オリジン `cor-jp.com/api/con
 2. 表示上の `reply` は **textContent のみ**（XSS 防止。Markdown HTML 化しない）。
 3. 最終形は handoff リダイレクトのみにしない。**Cloudia 内で送信完了**まで行う。
 4. 障害時は corsweb 最小フォーム / 電話へフォールバック。
+5. 本番 Cloudia は `cor-jp.com/contact/chat/*` へ edge mount されるため、Pages origin を本番 API の CORS allowlist に追加しない。
+6. 埋め込み時の起動完了は、React mount 後に exact allowlist 済み親 origin へ送る文字列 `cloudia:ready` だけで通知する。親は iframe `load` を ready と解釈しない。
 
 ### 現行 Worker レスポンス（chat）
 

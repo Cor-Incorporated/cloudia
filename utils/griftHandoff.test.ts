@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  announceCloudiaReady,
+  CLOUDIA_READY_MESSAGE,
   GRIFT_MAX_PORTAL_TTL_MS,
   GRIFT_PRODUCTION_PUBLIC_ORIGIN,
   openGriftHandoff,
@@ -83,6 +85,48 @@ function malformedPortalUrls(): string[] {
 }
 
 describe('Grift handoff navigation', () => {
+  it('announces application readiness only to the exact allowlisted embed parent', () => {
+    const browser = framedBrowser(
+      'https://cor-jp.com/contact/?source=corsweb-launcher',
+      'https://cor-jp.com',
+    );
+
+    expect(announceCloudiaReady(browser)).toBe(true);
+    expect(browser.parent.postMessage).toHaveBeenCalledExactlyOnceWith(
+      CLOUDIA_READY_MESSAGE,
+      'https://cor-jp.com',
+    );
+
+    const previewBrowser = framedBrowser(
+      `${FIREBASE_PREVIEW_PARENT_ORIGIN}/contact/chat/?embed=1`,
+      'https://codex-cloudia-grift-uat.cloudia-contact.pages.dev',
+    );
+    expect(announceCloudiaReady(previewBrowser, FIREBASE_PREVIEW_PARENT_ORIGIN)).toBe(true);
+    expect(previewBrowser.parent.postMessage).toHaveBeenCalledExactlyOnceWith(
+      CLOUDIA_READY_MESSAGE,
+      FIREBASE_PREVIEW_PARENT_ORIGIN,
+    );
+  });
+
+  it('does not announce readiness top-level or to an untrusted or malformed parent', () => {
+    const topLevel = topLevelBrowser();
+    expect(announceCloudiaReady(topLevel)).toBe(false);
+    expect(topLevel.postMessage).not.toHaveBeenCalled();
+
+    for (const referrer of [
+      'https://evil.example/contact/',
+      'https://cor-jp.com.evil.example/contact/',
+      'https://user:password@cor-jp.com/contact/',
+      'https://cor-jp.com:443/contact/',
+      'HTTPS://cor-jp.com/contact/',
+      '',
+    ]) {
+      const browser = framedBrowser(referrer, 'https://cor-jp.com');
+      expect(announceCloudiaReady(browser), referrer).toBe(false);
+      expect(browser.parent.postMessage).not.toHaveBeenCalled();
+    }
+  });
+
   it('allows only the exact fragment exchange URL and returns it unchanged', () => {
     expect(parseAllowedGriftHandoffUrl(PORTAL_URL)).toBe(PORTAL_URL);
 

@@ -1,6 +1,6 @@
 # ADR-0002 Cloudflare ホスティング・UI・corsweb 公開形態
 
-## ステータス: Accepted (2026-07-10) / Revised (2026-07-10)
+## ステータス: Accepted (2026-07-10) / Revised (2026-07-15)
 
 ## 背景
 
@@ -26,6 +26,8 @@
 
 - `?intent=` で初期選択肢をプリセット（ADR-0010 キー）。
 - SSGFORM / 最小 ContactForm は **fallback のみ**（JS 無効・AI 障害・a11y）。常時目立つ位置に出さない。fallback にも Turnstile・rate limit 相当を適用。
+- 本番は Cloudflare edge が `cor-jp.com/contact/chat/*` を Cloudia Pages の配信物へ直接マウントし、`/contact/chat/` prefix を Pages 側から隠蔽する。Cloudia の API は同一オリジン `/api/contact/*` のままとする。
+- Firebase Preview のみ corsweb wrapper から Cloudia Preview を iframe する。wrapper と本番ランチャーは iframe の `load` を起動完了とみなさず、Cloudia React root が allowlist 済み親 origin へ送る exact `cloudia:ready` を待つ。
 
 ### UI（LINE 風 + 表情）
 

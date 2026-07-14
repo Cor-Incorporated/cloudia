@@ -12,7 +12,7 @@ import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
 import { resolveLaunchContext } from './utils/launchContext';
-import { openGriftHandoff } from './utils/griftHandoff';
+import { announceCloudiaReady, openGriftHandoff } from './utils/griftHandoff';
 import {
   forgetSubmissionIdempotencyKey,
   getOrCreateHandoffConsentAcceptedAt,
@@ -124,6 +124,7 @@ const App: React.FC = () => {
   const startAttemptRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const readyAnnouncedRef = useRef(false);
   const [intentStartState, setIntentStartState] = useState<'idle' | 'starting' | 'started'>('idle');
   const [readyForContact, setReadyForContact] = useState(false);
   const [showHandoff, setShowHandoff] = useState(false);
@@ -153,6 +154,11 @@ const App: React.FC = () => {
   useEffect(() => {
     document.title = t('title');
   }, [t, locale]);
+
+  useEffect(() => {
+    if (!embedMode || readyAnnouncedRef.current) return;
+    readyAnnouncedRef.current = announceCloudiaReady(window);
+  }, [embedMode]);
 
   useEffect(() => {
     resetTurnstile();

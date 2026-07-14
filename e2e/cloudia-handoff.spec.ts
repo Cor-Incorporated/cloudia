@@ -246,6 +246,13 @@ test.describe('eligible Cloudia to Grift handoff', () => {
       });
 
       await page.goto(PARENT_URL, { waitUntil: 'domcontentloaded' });
+      await expect.poll(async () => page.evaluate(() => (
+        (window as typeof window & { __cloudiaMessages?: unknown[] }).__cloudiaMessages ?? []
+      ))).toEqual([{
+        data: 'cloudia:ready',
+        origin: BASE_URL,
+        sourceIsFrame: true,
+      }]);
       const cloudia = page.frameLocator('#cloudia');
       await openHandoffForm(cloudia);
       await fillHandoffForm(cloudia);
@@ -253,19 +260,26 @@ test.describe('eligible Cloudia to Grift handoff', () => {
 
       await expect.poll(async () => page.evaluate(() => (
         (window as typeof window & { __cloudiaMessages?: unknown[] }).__cloudiaMessages?.length ?? 0
-      ))).toBe(1);
+      ))).toBe(2);
       const messages = await page.evaluate(() => (
         (window as typeof window & { __cloudiaMessages?: unknown[] }).__cloudiaMessages ?? []
       ));
-      expect(messages).toEqual([{
-        data: {
-          type: 'cloudia:grift-handoff-ready',
-          url: ACTIVE_PORTAL_URL,
-          expiresAt,
+      expect(messages).toEqual([
+        {
+          data: 'cloudia:ready',
+          origin: BASE_URL,
+          sourceIsFrame: true,
         },
-        origin: BASE_URL,
-        sourceIsFrame: true,
-      }]);
+        {
+          data: {
+            type: 'cloudia:grift-handoff-ready',
+            url: ACTIVE_PORTAL_URL,
+            expiresAt,
+          },
+          origin: BASE_URL,
+          sourceIsFrame: true,
+        },
+      ]);
       expect(page.url()).toBe(PARENT_URL);
       expect(submitRequests[0]).toMatchObject({
         intent: handoffCase.intent,
@@ -330,19 +344,26 @@ test.describe('explicit Preview Grift origin allowlist', () => {
 
     await expect.poll(async () => page.evaluate(() => (
       (window as typeof window & { __cloudiaMessages?: unknown[] }).__cloudiaMessages?.length ?? 0
-    ))).toBe(1);
+    ))).toBe(2);
     const messages = await page.evaluate(() => (
       (window as typeof window & { __cloudiaMessages?: unknown[] }).__cloudiaMessages ?? []
     ));
-    expect(messages).toEqual([{
-      data: {
-        type: 'cloudia:grift-handoff-ready',
-        url: PREVIEW_PORTAL_URL,
-        expiresAt,
+    expect(messages).toEqual([
+      {
+        data: 'cloudia:ready',
+        origin: BASE_URL,
+        sourceIsFrame: true,
       },
-      origin: BASE_URL,
-      sourceIsFrame: true,
-    }]);
+      {
+        data: {
+          type: 'cloudia:grift-handoff-ready',
+          url: PREVIEW_PORTAL_URL,
+          expiresAt,
+        },
+        origin: BASE_URL,
+        sourceIsFrame: true,
+      },
+    ]);
   });
 });
 

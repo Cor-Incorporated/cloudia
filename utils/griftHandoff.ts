@@ -1,6 +1,7 @@
 import { parseCanonicalExactHttpsOrigin } from './exactHttpsOrigin';
 
 export const GRIFT_HANDOFF_MESSAGE_TYPE = 'cloudia:grift-handoff-ready';
+export const CLOUDIA_READY_MESSAGE = 'cloudia:ready';
 export const GRIFT_MAX_PORTAL_TTL_MS = 5 * 60 * 1000;
 
 export const GRIFT_PRODUCTION_PUBLIC_ORIGIN = 'https://app.griftai.org';
@@ -33,6 +34,33 @@ export interface GriftHandoffBrowser extends GriftMessageTarget {
 }
 
 export type GriftHandoffAction = 'navigated' | 'messaged' | 'blocked';
+
+/**
+ * Announce that the actual Cloudia React application has mounted.
+ *
+ * A parent must never infer readiness from an iframe `load` event: error and
+ * CSP documents also fire it. Reuse the same exact referrer-origin boundary as
+ * the Grift handoff so both the production edge mount and Preview wrapper can
+ * trust one application-level signal without widening postMessage targets.
+ */
+export function announceCloudiaReady(
+  browser: GriftHandoffBrowser = window,
+  configuredEmbedParentOrigins: unknown = CONFIGURED_EMBED_PARENT_ORIGINS,
+): boolean {
+  if (browser.parent === browser) return false;
+  const targetOrigin = resolveEmbedParentOrigin(
+    browser.document?.referrer,
+    browser.location.origin,
+    configuredEmbedParentOrigins,
+  );
+  if (!targetOrigin) return false;
+  try {
+    browser.parent.postMessage(CLOUDIA_READY_MESSAGE, targetOrigin);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Build an exact HTTPS origin allowlist from the environment-specific value
