@@ -117,6 +117,8 @@ describe('contactChatClient', () => {
         purpose: '業務システム開発',
         industryRole: '製造 / 情シス',
         stage: 'exploring',
+        discoverySource: '紹介',
+        contactReason: '業務改善の相談',
       },
     }), { status: 200 })));
 
@@ -129,6 +131,8 @@ describe('contactChatClient', () => {
         purpose: '業務システム開発',
         industryRole: '製造 / 情シス',
         stage: 'exploring',
+        discoverySource: '紹介',
+        contactReason: '業務改善の相談',
       },
     });
   });

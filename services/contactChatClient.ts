@@ -23,6 +23,10 @@ export interface StructuredLead {
   dataSensitivity?: string;
   stage?: string;
   timingBudget?: string;
+  /** Marketing context: how the visitor found Cor. */
+  discoverySource?: string;
+  /** Marketing context: why the visitor is contacting Cor. now. */
+  contactReason?: string;
 }
 
 export interface ChatResult {
