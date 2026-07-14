@@ -3,9 +3,10 @@ import { expect, test, type FrameLocator, type Page, type Route } from '@playwri
 
 const BASE_URL = 'http://127.0.0.1:4173';
 const PARENT_URL = `${BASE_URL}/e2e/embed-parent.html`;
-const PORTAL_URL = 'https://app.griftai.org/chat/portal/opaque-token_123.~';
+const EXCHANGE_CODE = 'Ma_XZhn01UsAfQRYmYxXD9KZVzK0bKQCSv0nZFbofUM';
+const PORTAL_URL = `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`;
 const PREVIEW_PORTAL_ORIGIN = 'https://grift-preview.example.run.app';
-const PREVIEW_PORTAL_URL = `${PREVIEW_PORTAL_ORIGIN}/chat/portal/preview-token_123.~`;
+const PREVIEW_PORTAL_URL = `${PREVIEW_PORTAL_ORIGIN}/chat/portal#exchange_code=${EXCHANGE_CODE}`;
 const PREVIEW_ORIGIN_CONFIGURED = (process.env.VITE_GRIFT_PUBLIC_URL_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
@@ -83,7 +84,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-function futureExpiry(offsetMs = 60 * 60 * 1000): string {
+function futureExpiry(offsetMs = 4 * 60 * 1000): string {
   return new Date(Date.now() + offsetMs).toISOString();
 }
 
@@ -345,7 +346,7 @@ test.describe('portal URL and expiry security', () => {
   const invalidHandoffs = [
     {
       name: 'untrusted origin',
-      url: 'https://evil.example/chat/portal/opaque-token',
+      url: `https://evil.example/chat/portal#exchange_code=${EXCHANGE_CODE}`,
       expiresAt: () => futureExpiry(),
     },
     ...(!PREVIEW_ORIGIN_CONFIGURED ? [{
@@ -354,18 +355,124 @@ test.describe('portal URL and expiry security', () => {
       expiresAt: () => futureExpiry(),
     }] : []),
     {
-      name: 'portal token shorter than eight characters',
-      url: 'https://app.griftai.org/chat/portal/1234567',
+      name: 'HTTP scheme',
+      url: `http://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'explicit default port',
+      url: `https://app.griftai.org:443/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'explicit non-default port',
+      url: `https://app.griftai.org:444/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'userinfo credential',
+      url: `https://user:password@app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'percent-encoded userinfo credential',
+      url: `https://user%3Apassword@app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'origin suffix confusion',
+      url: `https://app.griftai.org.evil.example/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'legacy credential path',
+      url: `https://app.griftai.org/chat/portal/${EXCHANGE_CODE}`,
       expiresAt: () => futureExpiry(),
     },
     {
       name: 'trailing slash path variant',
-      url: `${PORTAL_URL}/`,
+      url: `https://app.griftai.org/chat/portal/#exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'alternate path',
+      url: `https://app.griftai.org/chat/other#exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'percent-encoded path spelling',
+      url: `https://app.griftai.org/chat/%70ortal#exchange_code=${EXCHANGE_CODE}`,
       expiresAt: () => futureExpiry(),
     },
     {
       name: 'query open redirect',
-      url: `${PORTAL_URL}?next=https://evil.example`,
+      url: `https://app.griftai.org/chat/portal?next=https://evil.example#exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'missing fragment',
+      url: 'https://app.griftai.org/chat/portal',
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'empty exchange code',
+      url: 'https://app.griftai.org/chat/portal#exchange_code=',
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'case-confused fragment key',
+      url: `https://app.griftai.org/chat/portal#Exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'percent-encoded fragment key',
+      url: `https://app.griftai.org/chat/portal#exchange%5Fcode=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'unknown fragment key',
+      url: `https://app.griftai.org/chat/portal#unknown=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'additional fragment parameter',
+      url: `${PORTAL_URL}&next=1`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'duplicate exchange_code parameter',
+      url: `${PORTAL_URL}&exchange_code=${EXCHANGE_CODE}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: '42-character exchange code',
+      url: `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE.slice(0, 42)}`,
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: '44-character exchange code',
+      url: `${PORTAL_URL}A`,
+      expiresAt: () => futureExpiry(),
+    },
+    ...[
+      ['dot', '.'],
+      ['tilde', '~'],
+      ['plus', '+'],
+      ['slash', '/'],
+      ['padding', '='],
+    ].map(([name, character]) => ({
+      name: `${name} in exchange code`,
+      url: `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE.slice(0, 42)}${character}`,
+      expiresAt: () => futureExpiry(),
+    })),
+    {
+      name: 'percent-encoded exchange credential',
+      url: 'https://app.griftai.org/chat/portal#exchange_code=%4Da_XZhn01UsAfQRYmYxXD9KZVzK0bKQCSv0nZFbofUM',
+      expiresAt: () => futureExpiry(),
+    },
+    {
+      name: 'non-canonical 32-byte base64url tail bits',
+      url: `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE.slice(0, 42)}B`,
       expiresAt: () => futureExpiry(),
     },
     {
@@ -374,20 +481,29 @@ test.describe('portal URL and expiry security', () => {
       expiresAt: () => new Date(Date.now() - 1_000).toISOString(),
     },
     {
-      name: 'TTL beyond 24 hours',
+      name: 'TTL beyond five minutes',
       url: PORTAL_URL,
-      expiresAt: () => futureExpiry(24 * 60 * 60 * 1000 + 60_000),
+      expiresAt: () => futureExpiry(6 * 60 * 1000),
     },
     {
       name: 'invalid expiry',
       url: PORTAL_URL,
       expiresAt: () => 'not-a-date',
     },
+    {
+      name: 'missing expiry',
+      url: PORTAL_URL,
+      expiresAt: () => undefined,
+    },
   ];
 
   for (const invalid of invalidHandoffs) {
     test(`falls back for ${invalid.name}`, async ({ page }) => {
       let portalRequests = 0;
+      const browserMessages: string[] = [];
+      const browserErrors: string[] = [];
+      page.on('console', (message) => browserMessages.push(message.text()));
+      page.on('pageerror', (error) => browserErrors.push(error.message));
       await installReadyStart(page);
       await page.route('**/api/contact/submit', async (route) => {
         await fulfillJson(route, {
@@ -415,6 +531,8 @@ test.describe('portal URL and expiry security', () => {
       await expect(page.getByRole('link', { name: 'Continue in Grift' })).toHaveCount(0);
       expect(portalRequests).toBe(0);
       expect(page.url()).toBe(originalUrl);
+      expect(browserMessages.join('\n')).not.toContain(invalid.url);
+      expect(browserErrors.join('\n')).not.toContain(invalid.url);
     });
   }
 

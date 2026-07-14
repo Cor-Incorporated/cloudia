@@ -9,7 +9,9 @@ import {
   toApiMessages,
 } from './contactChatClient';
 
-const FUTURE_HANDOFF_EXPIRY = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+const EXCHANGE_CODE = 'Ma_XZhn01UsAfQRYmYxXD9KZVzK0bKQCSv0nZFbofUM';
+const HANDOFF_URL = `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`;
+const FUTURE_HANDOFF_EXPIRY = new Date(Date.now() + 4 * 60 * 1000).toISOString();
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -325,7 +327,7 @@ describe('contactChatClient', () => {
       status: 'queued',
       handoff: {
         status: 'ready',
-        url: 'https://app.griftai.org/chat/portal/opaque-token',
+        url: HANDOFF_URL,
         expiresAt: FUTURE_HANDOFF_EXPIRY,
       },
     }), { status: 202 }));
@@ -380,7 +382,7 @@ describe('contactChatClient', () => {
       deliveryStatus: 'queued',
       handoff: {
         status: 'ready',
-        url: 'https://app.griftai.org/chat/portal/opaque-token',
+        url: HANDOFF_URL,
         expiresAt: FUTURE_HANDOFF_EXPIRY,
       },
     });
@@ -396,7 +398,7 @@ describe('contactChatClient', () => {
       ok: true,
       handoff: {
         status: 'ready',
-        url: 'https://app.griftai.org/chat/portal/eligible-token',
+        url: HANDOFF_URL,
         expiresAt: FUTURE_HANDOFF_EXPIRY,
       },
     }), { status: 200 }));
@@ -445,7 +447,7 @@ describe('contactChatClient', () => {
       status: 'sent',
       handoff: {
         status: 'ready',
-        url: 'https://app.griftai.org/chat/portal/must-not-open',
+        url: HANDOFF_URL,
         expiresAt: FUTURE_HANDOFF_EXPIRY,
       },
     }), { status: 200 }));
@@ -488,7 +490,7 @@ describe('contactChatClient', () => {
       ok: true,
       handoff: {
         status: 'ready',
-        url: 'https://app.griftai.org/chat/portal/must-not-open',
+        url: HANDOFF_URL,
         expiresAt: FUTURE_HANDOFF_EXPIRY,
       },
     }), { status: 200 }));
@@ -602,13 +604,13 @@ describe('contactChatClient', () => {
         ok: true,
         handoff: {
           status: 'ready',
-          url: 'https://evil.example/chat/portal/token',
+          url: `https://evil.example/chat/portal#exchange_code=${EXCHANGE_CODE}`,
           expiresAt: FUTURE_HANDOFF_EXPIRY,
         },
       }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         ok: true,
-        handoff: { status: 'ready', url: 'https://app.griftai.org/chat/portal/token' },
+        handoff: { status: 'ready', url: HANDOFF_URL },
       }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const payload = { name: 'Test User', email: 'test@example.com', message: '相談内容' };
@@ -648,7 +650,7 @@ describe('contactChatClient', () => {
       ok: true,
       handoff: {
         status: 'ready',
-        url: 'https://app.griftai.org/chat/portal/expired-token',
+        url: HANDOFF_URL,
         expiresAt: '2000-01-01T00:00:00.000Z',
       },
     }), { status: 200 })));

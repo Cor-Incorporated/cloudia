@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   GRIFT_MAX_PORTAL_TTL_MS,
   openGriftHandoff,
@@ -9,7 +9,12 @@ import {
   type GriftHandoffBrowser,
 } from './griftHandoff';
 
-function futureExpiry(offsetMs = 60 * 60 * 1000): string {
+const EXCHANGE_CODE = 'Ma_XZhn01UsAfQRYmYxXD9KZVzK0bKQCSv0nZFbofUM';
+const PORTAL_URL = `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`;
+const PREVIEW_ORIGIN = 'https://grift-preview.example.run.app';
+const PREVIEW_PORTAL_URL = `${PREVIEW_ORIGIN}/chat/portal#exchange_code=${EXCHANGE_CODE}`;
+
+function futureExpiry(offsetMs = 4 * 60 * 1000): string {
   return new Date(Date.now() + offsetMs).toISOString();
 }
 
@@ -33,41 +38,64 @@ function framedBrowser(referrer: string, childOrigin = 'https://cloudia.pages.de
   };
 }
 
-describe('Grift handoff navigation', () => {
-  it('allows only the exact public Grift portal URL shape', () => {
-    expect(parseAllowedGriftHandoffUrl('https://app.griftai.org/chat/portal/opaque-token'))
-      .toBe('https://app.griftai.org/chat/portal/opaque-token');
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-    for (const value of [
-      'http://app.griftai.org/chat/portal/token',
-      'https://app.griftai.org:444/chat/portal/token',
-      'https://user:password@app.griftai.org/chat/portal/token',
-      'https://app.griftai.org.evil.example/chat/portal/token',
-      'https://evil.example/chat/portal/token',
-      'https://app.griftai.org/admin',
-      'https://app.griftai.org/chat/portal/token/',
-      'https://app.griftai.org/chat/portal/token/next',
-      'https://app.griftai.org/chat/portal/token?next=https://evil.example',
-      'https://app.griftai.org/chat/portal/token#next',
-      'https://app.griftai.org/chat/portal/token%2Fadmin',
-      'https://app.griftai.org/chat/portal/%2e%2e%2Fadmin',
-      'https://app.griftai.org/chat/portal/a',
-      'https://app.griftai.org/chat/portal/1234567',
-    ]) {
+function malformedPortalUrls(): string[] {
+  const shortCode = EXCHANGE_CODE.slice(0, 42);
+  const nonCanonical32ByteCode = `${EXCHANGE_CODE.slice(0, 42)}B`;
+  return [
+    `http://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+    `https://app.griftai.org:443/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+    `https://app.griftai.org:444/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+    `https://user:password@app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+    `https://user%3Apassword@app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+    `https://app.griftai.org.evil.example/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+    `https://evil.example/chat/portal#exchange_code=${EXCHANGE_CODE}`,
+    `https://app.griftai.org/chat/portal/${EXCHANGE_CODE}`,
+    `https://app.griftai.org/chat/portal/#exchange_code=${EXCHANGE_CODE}`,
+    `https://app.griftai.org/chat/other#exchange_code=${EXCHANGE_CODE}`,
+    `https://app.griftai.org/chat/%70ortal#exchange_code=${EXCHANGE_CODE}`,
+    `https://app.griftai.org/chat/portal?next=https://evil.example#exchange_code=${EXCHANGE_CODE}`,
+    'https://app.griftai.org/chat/portal',
+    'https://app.griftai.org/chat/portal#exchange_code=',
+    `https://app.griftai.org/chat/portal#Exchange_code=${EXCHANGE_CODE}`,
+    `https://app.griftai.org/chat/portal#exchange%5Fcode=${EXCHANGE_CODE}`,
+    `https://app.griftai.org/chat/portal#unknown=${EXCHANGE_CODE}`,
+    `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}&next=1`,
+    `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}&exchange_code=${EXCHANGE_CODE}`,
+    `https://app.griftai.org/chat/portal#exchange_code=${shortCode}`,
+    `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}A`,
+    `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE.slice(0, 42)}.`,
+    `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE.slice(0, 42)}~`,
+    `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE.slice(0, 42)}+`,
+    `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE.slice(0, 42)}/`,
+    `https://app.griftai.org/chat/portal#exchange_code=${EXCHANGE_CODE}=`,
+    `https://app.griftai.org/chat/portal#exchange_code=%4Da_XZhn01UsAfQRYmYxXD9KZVzK0bKQCSv0nZFbofUM`,
+    `https://app.griftai.org/chat/portal#exchange_code=${nonCanonical32ByteCode}`,
+    ` ${PORTAL_URL}`,
+    `${PORTAL_URL} `,
+  ];
+}
+
+describe('Grift handoff navigation', () => {
+  it('allows only the exact fragment exchange URL and returns it unchanged', () => {
+    expect(parseAllowedGriftHandoffUrl(PORTAL_URL)).toBe(PORTAL_URL);
+
+    for (const value of malformedPortalUrls()) {
       expect(parseAllowedGriftHandoffUrl(value), value).toBeNull();
     }
-
-    expect(parseAllowedGriftHandoffUrl('https://app.griftai.org/chat/portal/12345678'))
-      .toBe('https://app.griftai.org/chat/portal/12345678');
   });
 
   it('adds only explicitly configured exact HTTPS Preview origins', () => {
     const configured = [
-      'https://grift-preview.example.run.app',
+      PREVIEW_ORIGIN,
       'https://grift-staging.example.run.app',
       'https://*.example.run.app',
       'http://insecure.example.run.app',
       'https://user:password@example.run.app',
+      'https://example.run.app:443',
       'https://example.run.app:444',
       'https://example.run.app/path',
       'not-a-url',
@@ -76,52 +104,39 @@ describe('Grift handoff navigation', () => {
 
     expect([...origins]).toEqual([
       'https://app.griftai.org',
-      'https://grift-preview.example.run.app',
+      PREVIEW_ORIGIN,
       'https://grift-staging.example.run.app',
     ]);
+    expect(parseAllowedGriftHandoffUrl(PREVIEW_PORTAL_URL, configured)).toBe(PREVIEW_PORTAL_URL);
     expect(parseAllowedGriftHandoffUrl(
-      'https://grift-preview.example.run.app/chat/portal/preview-token-123',
-      configured,
-    )).toBe('https://grift-preview.example.run.app/chat/portal/preview-token-123');
-    expect(parseAllowedGriftHandoffUrl(
-      'https://unlisted.example.run.app/chat/portal/preview-token-123',
+      `https://unlisted.example.run.app/chat/portal#exchange_code=${EXCHANGE_CODE}`,
       configured,
     )).toBeNull();
   });
 
   it('keeps the production default limited to the production origin', () => {
     expect([...resolveAllowedGriftPublicOrigins('')]).toEqual(['https://app.griftai.org']);
-    expect(parseAllowedGriftHandoffUrl(
-      'https://grift-preview.example.run.app/chat/portal/preview-token-123',
-      '',
-    )).toBeNull();
+    expect(parseAllowedGriftHandoffUrl(PREVIEW_PORTAL_URL, '')).toBeNull();
   });
 
-  it('navigates only a top-level standalone visitor', () => {
+  it('passes the unchanged fragment URL only to a top-level standalone visitor', () => {
     const browser = topLevelBrowser();
     const expiresAt = futureExpiry();
 
-    expect(openGriftHandoff('https://app.griftai.org/chat/portal/portal-token', false, browser, expiresAt))
-      .toBe('navigated');
-    expect(browser.location.assign).toHaveBeenCalledWith('https://app.griftai.org/chat/portal/portal-token');
+    expect(openGriftHandoff(PORTAL_URL, false, browser, expiresAt)).toBe('navigated');
+    expect(browser.location.assign).toHaveBeenCalledWith(PORTAL_URL);
 
-    expect(openGriftHandoff('https://app.griftai.org/chat/portal/portal-token', true, browser, expiresAt))
-      .toBe('navigated');
+    expect(openGriftHandoff(PORTAL_URL, true, browser, expiresAt)).toBe('navigated');
   });
 
-  it('notifies an allowlisted parent origin in embed mode', () => {
+  it('passes the unchanged fragment URL to an allowlisted embed parent', () => {
     const browser = framedBrowser('https://www.cor-jp.com/contact/?intent=contract-dev');
     const expiresAt = futureExpiry();
 
-    expect(openGriftHandoff(
-      'https://app.griftai.org/chat/portal/portal-token',
-      true,
-      browser,
-      expiresAt,
-    )).toBe('messaged');
+    expect(openGriftHandoff(PORTAL_URL, true, browser, expiresAt)).toBe('messaged');
     expect(browser.parent.postMessage).toHaveBeenCalledWith({
       type: 'cloudia:grift-handoff-ready',
-      url: 'https://app.griftai.org/chat/portal/portal-token',
+      url: PORTAL_URL,
       expiresAt,
     }, 'https://www.cor-jp.com');
     expect(browser.location.assign).not.toHaveBeenCalled();
@@ -129,29 +144,51 @@ describe('Grift handoff navigation', () => {
 
   it('uses the same configured Preview origin contract before posting to an embed parent', () => {
     const browser = framedBrowser('https://cor-jp.com/contact/');
-    const previewOrigin = 'https://grift-preview.example.run.app';
-    const previewUrl = `${previewOrigin}/chat/portal/preview-token-123`;
     const expiresAt = futureExpiry();
 
-    expect(openGriftHandoff(previewUrl, true, browser, expiresAt, previewOrigin)).toBe('messaged');
+    expect(openGriftHandoff(PREVIEW_PORTAL_URL, true, browser, expiresAt, PREVIEW_ORIGIN))
+      .toBe('messaged');
     expect(browser.parent.postMessage).toHaveBeenCalledWith({
       type: 'cloudia:grift-handoff-ready',
-      url: previewUrl,
+      url: PREVIEW_PORTAL_URL,
       expiresAt,
     }, 'https://cor-jp.com');
 
     const unlistedBrowser = framedBrowser('https://cor-jp.com/contact/');
     expect(openGriftHandoff(
-      'https://unlisted.example.run.app/chat/portal/preview-token-123',
+      `https://unlisted.example.run.app/chat/portal#exchange_code=${EXCHANGE_CODE}`,
       true,
       unlistedBrowser,
       expiresAt,
-      previewOrigin,
+      PREVIEW_ORIGIN,
     )).toBe('blocked');
     expect(unlistedBrowser.parent.postMessage).not.toHaveBeenCalled();
   });
 
-  it('does not leak a portal URL to an untrusted or origin-confused parent', () => {
+  it('applies the same malformed-URL validator to standalone and iframe handoff', () => {
+    for (const value of malformedPortalUrls()) {
+      const standalone = topLevelBrowser();
+      expect(openGriftHandoff(value, false, standalone, futureExpiry()), value).toBe('blocked');
+      expect(standalone.location.assign).not.toHaveBeenCalled();
+
+      const framed = framedBrowser('https://cor-jp.com/contact/');
+      expect(openGriftHandoff(value, true, framed, futureExpiry()), value).toBe('blocked');
+      expect(framed.parent.postMessage).not.toHaveBeenCalled();
+    }
+  });
+
+  it('does not log or throw a rejected fragment credential', () => {
+    const rejected = `https://evil.example/chat/portal#exchange_code=${EXCHANGE_CODE}`;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(() => openGriftHandoff(rejected, false, topLevelBrowser(), futureExpiry())).not.toThrow();
+    expect(JSON.stringify([...log.mock.calls, ...warn.mock.calls, ...error.mock.calls]))
+      .not.toContain(rejected);
+  });
+
+  it('does not disclose a portal URL to an untrusted or origin-confused parent', () => {
     const expiresAt = futureExpiry();
     for (const referrer of [
       '',
@@ -161,8 +198,7 @@ describe('Grift handoff navigation', () => {
       'http://cor-jp.com/contact/',
     ]) {
       const browser = framedBrowser(referrer);
-      expect(openGriftHandoff('https://app.griftai.org/chat/portal/portal-token', true, browser, expiresAt), referrer)
-        .toBe('blocked');
+      expect(openGriftHandoff(PORTAL_URL, true, browser, expiresAt), referrer).toBe('blocked');
       expect(browser.parent.postMessage).not.toHaveBeenCalled();
       expect(browser.location.assign).not.toHaveBeenCalled();
     }
@@ -171,8 +207,7 @@ describe('Grift handoff navigation', () => {
   it('does not navigate a framed page that omitted the embed contract', () => {
     const browser = framedBrowser('https://cor-jp.com/contact/');
 
-    expect(openGriftHandoff('https://app.griftai.org/chat/portal/portal-token', false, browser, futureExpiry()))
-      .toBe('blocked');
+    expect(openGriftHandoff(PORTAL_URL, false, browser, futureExpiry())).toBe('blocked');
     expect(browser.parent.postMessage).not.toHaveBeenCalled();
     expect(browser.location.assign).not.toHaveBeenCalled();
   });
@@ -188,23 +223,21 @@ describe('Grift handoff navigation', () => {
     const browser = topLevelBrowser();
     browser.location.assign = vi.fn(() => { throw new Error('blocked'); });
 
-    expect(openGriftHandoff('https://app.griftai.org/chat/portal/portal-token', false, browser, futureExpiry()))
-      .toBe('blocked');
+    expect(openGriftHandoff(PORTAL_URL, false, browser, futureExpiry())).toBe('blocked');
   });
 
-  it('blocks missing, expired, and overlong portal expiries at navigation time', () => {
+  it('blocks missing, expired, and over-five-minute exchange expiries at navigation time', () => {
     const browser = topLevelBrowser();
 
-    expect(openGriftHandoff('https://app.griftai.org/chat/portal/portal-token', false, browser))
-      .toBe('blocked');
+    expect(openGriftHandoff(PORTAL_URL, false, browser)).toBe('blocked');
     expect(openGriftHandoff(
-      'https://app.griftai.org/chat/portal/portal-token',
+      PORTAL_URL,
       false,
       browser,
       new Date(Date.now() - 1_000).toISOString(),
     )).toBe('blocked');
     expect(openGriftHandoff(
-      'https://app.griftai.org/chat/portal/portal-token',
+      PORTAL_URL,
       false,
       browser,
       futureExpiry(GRIFT_MAX_PORTAL_TTL_MS + 60_000),
@@ -212,7 +245,7 @@ describe('Grift handoff navigation', () => {
     expect(browser.location.assign).not.toHaveBeenCalled();
   });
 
-  it('normalizes only a live expiry within the 24-hour contract', () => {
+  it('normalizes only a live expiry within the five-minute exchange contract', () => {
     const now = Date.now();
     const valid = new Date(now + 60_000).toISOString();
 

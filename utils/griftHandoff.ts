@@ -1,8 +1,12 @@
 export const GRIFT_HANDOFF_MESSAGE_TYPE = 'cloudia:grift-handoff-ready';
-export const GRIFT_MAX_PORTAL_TTL_MS = 24 * 60 * 60 * 1000;
+export const GRIFT_MAX_PORTAL_TTL_MS = 5 * 60 * 1000;
 
 export const GRIFT_PRODUCTION_PUBLIC_ORIGIN = 'https://app.griftai.org';
-const GRIFT_PORTAL_PATH = /^\/chat\/portal\/[A-Za-z0-9._~-]{8,512}$/;
+const GRIFT_PORTAL_PATH = '/chat/portal';
+const GRIFT_EXCHANGE_FRAGMENT = /^#exchange_code=([A-Za-z0-9_-]{43})$/;
+// A canonical no-padding base64url encoding of 32 bytes has 43 characters;
+// its final character carries four data bits and two zero padding bits.
+const GRIFT_32_BYTE_BASE64URL = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 const CONFIGURED_GRIFT_PUBLIC_URL_ORIGINS = import.meta.env.VITE_GRIFT_PUBLIC_URL_ORIGINS;
 const TRUSTED_EMBED_PARENT_ORIGINS = new Set([
   'https://cor-jp.com',
@@ -65,14 +69,18 @@ export function parseAllowedGriftHandoffUrl(
   value: unknown,
   configuredOrigins: unknown = CONFIGURED_GRIFT_PUBLIC_URL_ORIGINS,
 ): string | null {
-  if (typeof value !== 'string' || !value.trim() || value.length > 2048) return null;
+  if (typeof value !== 'string' || !value || value.length > 2048 || value !== value.trim()) return null;
   try {
-    const url = new URL(value.trim());
+    const url = new URL(value);
     if (!resolveAllowedGriftPublicOrigins(configuredOrigins).has(url.origin)) return null;
-    if (url.protocol !== 'https:' || url.username || url.password) return null;
-    if (!GRIFT_PORTAL_PATH.test(url.pathname)) return null;
-    if (url.search || url.hash) return null;
-    return url.toString();
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
+    if (url.pathname !== GRIFT_PORTAL_PATH || url.search) return null;
+    const fragment = GRIFT_EXCHANGE_FRAGMENT.exec(url.hash);
+    if (!fragment || !GRIFT_32_BYTE_BASE64URL.test(fragment[1])) return null;
+    // Equality with the canonical raw form rejects explicit default ports,
+    // encoded credentials/keys, alternate path spellings, and URL rewriting.
+    const canonical = `${url.origin}${GRIFT_PORTAL_PATH}#exchange_code=${fragment[1]}`;
+    return value === canonical ? value : null;
   } catch {
     return null;
   }

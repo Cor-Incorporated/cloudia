@@ -83,7 +83,10 @@ when more than one exact origin is required). Entries must be HTTPS origins
 with no path, query, fragment, credentials, port alias, or wildcard. The
 production Cloudia build must leave it unset. Both top-level navigation and the
 portal URL sent to the trusted Cor. iframe parent use this same allowlist and
-the exact `/chat/portal/<8-512 character token>` contract.
+the exact `/chat/portal#exchange_code=<43-character base64url code>` contract.
+The code is a no-padding encoding of 32 random bytes and expires no more than
+five minutes after receipt. Cloudia validates and forwards the unchanged URL;
+it does not read, exchange, persist, or log the fragment credential.
 
 **Calendar Setup (Optional):**
 1. Open Google Calendar
