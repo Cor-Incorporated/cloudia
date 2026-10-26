@@ -70,27 +70,29 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, o
           <input tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
         </label>
       </div>
+      {/* The submit button comes first: in the narrow launcher panel the
+          buttons stack, and the primary action should not sit below the fold. */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={onBack}
-          className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-        >
-          {t('backToChat')}
-        </button>
         <button
           type="submit"
           disabled={disabled}
-          className="min-h-11 w-full rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300 sm:w-auto"
+          className="min-h-11 w-full rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:bg-slate-300 sm:w-auto"
         >
           {t('handoffSubmit')}
         </button>
         <button
           type="button"
           disabled={disabled}
+          onClick={onBack}
+          className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        >
+          {t('backToChat')}
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
           onClick={onCancel}
-          className="min-h-11 w-full px-2 py-2.5 text-sm text-slate-500 underline underline-offset-2 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          className="min-h-11 w-full px-2 py-2.5 text-sm text-slate-500 underline underline-offset-2 hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
         >
           {t('cancelConversation')}
         </button>

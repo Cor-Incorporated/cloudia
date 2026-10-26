@@ -153,6 +153,10 @@ const App: React.FC = () => {
   }, [chatReady, isLoading]);
 
   useEffect(() => {
+    // Before the first exchange the list holds only the greeting and the
+    // purpose picker. Scrolling to the bottom there cuts off the start of the
+    // greeting in the launcher's short panel, so keep the list at the top.
+    if (messages.length <= 1 && !isLoading && !showHandoff) return;
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, isLoading, showHandoff]);
 
@@ -422,7 +426,7 @@ const App: React.FC = () => {
     const controller = beginRequest('submit');
     const handoffMessage = values.message.trim() || conversationSummary.trim() || t('handoffDefaultMessage');
     try {
-      await postContactSubmit({
+      const submitResult = await postContactSubmit({
         sessionId,
         idempotencyKey: idempotencyKeyRef.current,
         name: values.name,
@@ -443,7 +447,16 @@ const App: React.FC = () => {
       setShowHandoff(false);
       setMessages((prev) => [
         ...prev,
-        { id: uuidv4(), text: t('handoffSuccess'), sender: 'ai', emotion: Emotion.HAPPY },
+        {
+          id: uuidv4(),
+          // The Worker emails a receipt with the same number, so only promise
+          // that email when a receipt number came back.
+          text: submitResult.receiptId
+            ? t('handoffSuccessWithReceipt', { receiptId: submitResult.receiptId })
+            : t('handoffSuccess'),
+          sender: 'ai',
+          emotion: Emotion.HAPPY,
+        },
       ]);
       setCurrentEmotion(Emotion.HAPPY);
       setApiDegraded(false);
@@ -667,7 +680,13 @@ const App: React.FC = () => {
                 isLoading={isLoading}
                 disabled={!chatReady}
                 inputRef={inputRef}
-                placeholderKey={appMode === 'intake' ? 'typeYourMessageIntake' : 'typeYourMessage'}
+                placeholderKey={
+                  appMode !== 'intake'
+                    ? 'typeYourMessage'
+                    : !chatReady && !isLoading
+                      ? 'typeYourMessageChooseIntent'
+                      : 'typeYourMessageIntake'
+                }
               />
             </div>
           )}

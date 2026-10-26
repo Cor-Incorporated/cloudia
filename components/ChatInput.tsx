@@ -6,7 +6,7 @@ interface ChatInputProps {
   isLoading: boolean;
   disabled?: boolean;
   inputRef?: React.RefObject<HTMLInputElement | null>;
-  placeholderKey?: 'typeYourMessage' | 'typeYourMessageIntake';
+  placeholderKey?: 'typeYourMessage' | 'typeYourMessageIntake' | 'typeYourMessageChooseIntent';
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({

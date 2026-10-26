@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import IntentPicker from './IntentPicker';
+import { CONTACT_INTENT_DISPLAY_OPTIONS } from '../constants/intents';
 import { LanguageProvider } from '../contexts/LanguageContext';
 
 function renderPicker(selected: 'local-llm-poc' | 'grift-paid-trial' | null = null): string {
@@ -35,7 +36,9 @@ describe('IntentPicker', () => {
     expect(markup).toContain('ご相談の目的を選んでください');
     expect((markup.match(/aria-pressed=/g) ?? []).length).toBe(5);
     expect(markup).toContain('min-h-11');
-    expect(markup).toContain('AI見積もりシステムについて');
+    expect(markup).toContain('Griftについて相談したい');
+    // Grift is no longer an estimation tool (corsweb ADR-0022); no option may say so.
+    expect(markup).not.toContain('見積');
   });
 
   it('marks the selected intent without rendering a second control', () => {
@@ -46,11 +49,20 @@ describe('IntentPicker', () => {
     expect((markup.match(/aria-pressed="false"/g) ?? []).length).toBe(4);
   });
 
-  it('maps legacy Grift intents to the single estimate-system option', () => {
+  it('maps legacy Grift intents to the single Grift option', () => {
     const markup = renderPicker('grift-paid-trial');
 
-    expect(markup).toContain('AI見積もりシステムについて');
+    expect(markup).toMatch(/aria-pressed="true"[^>]*>Griftについて相談したい</);
     expect((markup.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
     expect((markup.match(/aria-pressed="false"/g) ?? []).length).toBe(4);
+  });
+
+  it('starts new selections only with intents that are still offered', () => {
+    // grift-paid-trial and estimate-audit were withdrawn in 2026-10 (corsweb ADR-0014 table, ADR-0022).
+    // They stay accepted from legacy URLs, but a click must never send them.
+    const primaryIntents = CONTACT_INTENT_DISPLAY_OPTIONS.map((option) => option.primaryIntent);
+    expect(primaryIntents).not.toContain('grift-paid-trial');
+    expect(primaryIntents).not.toContain('estimate-audit');
+    expect(CONTACT_INTENT_DISPLAY_OPTIONS.find((option) => option.id === 'grift')?.primaryIntent).toBe('grift-team-beta');
   });
 });

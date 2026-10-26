@@ -182,6 +182,5 @@ For issues or questions:
 - Env:
   - `VITE_CONTACT_API_BASE` — e.g. empty for same-origin, or Preview Worker origin
   - `VITE_CONTACT_CHAT_MOCK=1` — mock chat/submit for local UI QA
-  - `VITE_FALLBACK_CONTACT_URL` — default `https://cor-jp.com/contact/`
 - **Embed**: open with `?embed=1` for compact header (iframe /corsweb #254)
 - **LINE UI**: left Cloudia avatar + bubble, right user bubble; plain-text replies
