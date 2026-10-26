@@ -11,6 +11,7 @@ import FaqResolutionPrompt from './components/FaqResolutionPrompt';
 import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
+import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget } from './utils/chatView';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import {
   isContactChatMock,
@@ -153,11 +154,13 @@ const App: React.FC = () => {
   }, [chatReady, isLoading]);
 
   useEffect(() => {
-    // Before the first exchange the list holds only the greeting and the
-    // purpose picker. Scrolling to the bottom there cuts off the start of the
-    // greeting in the launcher's short panel, so keep the list at the top.
-    if (messages.length <= 1 && !isLoading && !showHandoff) return;
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+    const list = listRef.current;
+    if (!list) return;
+    if (messageListScrollTarget(messages.length, isLoading, showHandoff) === 'top') {
+      list.scrollTo({ top: 0 });
+      return;
+    }
+    list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
   }, [messages, isLoading, showHandoff]);
 
   const beginRequest = useCallback((kind: 'start' | 'chat' | 'submit'): AbortController => {
@@ -445,18 +448,10 @@ const App: React.FC = () => {
       setHandoffDraft(EMPTY_HANDOFF_VALUES);
       setSubmitted(true);
       setShowHandoff(false);
+      const success = handoffSuccessMessage(submitResult.receiptId);
       setMessages((prev) => [
         ...prev,
-        {
-          id: uuidv4(),
-          // The Worker emails a receipt with the same number, so only promise
-          // that email when a receipt number came back.
-          text: submitResult.receiptId
-            ? t('handoffSuccessWithReceipt', { receiptId: submitResult.receiptId })
-            : t('handoffSuccess'),
-          sender: 'ai',
-          emotion: Emotion.HAPPY,
-        },
+        { id: uuidv4(), text: t(success.textKey, success.replacements), sender: 'ai', emotion: Emotion.HAPPY },
       ]);
       setCurrentEmotion(Emotion.HAPPY);
       setApiDegraded(false);
@@ -680,13 +675,7 @@ const App: React.FC = () => {
                 isLoading={isLoading}
                 disabled={!chatReady}
                 inputRef={inputRef}
-                placeholderKey={
-                  appMode !== 'intake'
-                    ? 'typeYourMessage'
-                    : !chatReady && !isLoading
-                      ? 'typeYourMessageChooseIntent'
-                      : 'typeYourMessageIntake'
-                }
+                placeholderKey={chatPlaceholderKey(appMode, chatReady, isLoading, selectedIntent)}
               />
             </div>
           )}

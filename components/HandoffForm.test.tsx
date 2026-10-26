@@ -42,5 +42,7 @@ describe('HandoffForm', () => {
     expect(submit).toBeGreaterThan(-1);
     expect(submit).toBeLessThan(back);
     expect(back).toBeLessThan(cancel);
+    // The first button must also be the one that submits, not just carry its label.
+    expect(markup).toMatch(/<button type="submit"[^>]*>問い合わせを送信</);
   });
 });

@@ -4,7 +4,7 @@ export const translations = {
     welcomeMessage:
       "Hello. I'm Cloudia, the AI receptionist for Cor. I'll ask a few questions to organize your inquiry and hand it off to our team. Please do not enter confidential information such as customer names, personal data, or contract text. First, choose the purpose of your inquiry.",
     welcomeMessageAmbassador:
-      "Hello, I'm Cloudia from Cor. This is the casual conversation mode. Please feel free to ask about our company and technology. If your topic becomes a concrete project inquiry, I can also guide you to our contact form.",
+      "Hello, I'm Cloudia from Cor. This is the casual conversation mode. Please feel free to ask about our company and technology. If your topic becomes a concrete project inquiry, I can guide you to the inquiry reception mode.",
     piiNotice:
       "Do not enter confidential information during the chat (customer names, personal data, contracts, etc.). Contact details are collected only at the final submit step.",
     intentPickerLabel: "Inquiry purpose",

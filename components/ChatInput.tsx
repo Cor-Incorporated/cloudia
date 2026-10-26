@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import type { ChatPlaceholderKey } from '../utils/chatView';
 
 interface ChatInputProps {
   onSendMessage: (text: string) => void;
   isLoading: boolean;
   disabled?: boolean;
   inputRef?: React.RefObject<HTMLInputElement | null>;
-  placeholderKey?: 'typeYourMessage' | 'typeYourMessageIntake' | 'typeYourMessageChooseIntent';
+  placeholderKey?: ChatPlaceholderKey;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
