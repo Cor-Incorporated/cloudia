@@ -22,7 +22,6 @@ Optional `.env.local` values:
 ```env
 VITE_CONTACT_API_BASE=https://your-contact-worker.example.com
 VITE_CONTACT_CHAT_MOCK=1
-VITE_FALLBACK_CONTACT_URL=https://cor-jp.com/contact/
 GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
 ```
 
@@ -39,7 +38,7 @@ Leave `VITE_CONTACT_API_BASE` empty when Cloudia is mounted on the same origin a
 5. corsweb's Worker builds the mode-specific system instruction and company context, calls Vertex Gemini, and normalizes the response.
 6. Cloudia renders the plain-text `reply` and derives an avatar expression from the normalized workflow result.
 
-Provider failures use a generic localized message and the corsweb fallback form. Do not display upstream response bodies, status details, credentials, or raw model output.
+Provider failures use a generic localized message and a retry button. Do not link to a contact form: corsweb keeps no form (corsweb ADR-0005, 2026-09-13 revision) and its /contact/ page only reopens this chat, so the link would loop (corsweb #352). Do not display upstream response bodies, status details, credentials, or raw model output.
 
 ### PII Boundary
 

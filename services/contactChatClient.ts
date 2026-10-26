@@ -130,6 +130,16 @@ export interface SubmitResult {
   ok: boolean;
   status: number;
   body?: unknown;
+  /** Reference number the Worker also prints in the receipt email (e.g. COR-20261026-1A2B3C4D). */
+  receiptId?: string;
+}
+
+const RECEIPT_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
+
+function parseReceiptId(body: unknown): string | undefined {
+  if (!isRecord(body) || typeof body.receiptId !== 'string') return undefined;
+  const receiptId = body.receiptId.trim();
+  return RECEIPT_ID_PATTERN.test(receiptId) ? receiptId : undefined;
 }
 
 function apiBase(): string {
@@ -153,11 +163,6 @@ function submitUrl(): string {
 export function isContactChatMock(): boolean {
   const env = (import.meta as ImportMeta & { env?: Record<string, string> }).env;
   return env?.VITE_CONTACT_CHAT_MOCK === '1' || env?.VITE_CONTACT_CHAT_MOCK === 'true';
-}
-
-export function getFallbackContactUrl(): string {
-  const env = (import.meta as ImportMeta & { env?: Record<string, string> }).env;
-  return env?.VITE_FALLBACK_CONTACT_URL || 'https://cor-jp.com/contact/';
 }
 
 /** 会話履歴を API messages 形式へ（system は送らない） */
@@ -319,5 +324,6 @@ export async function postContactSubmit(
   if (!res.ok) {
     throw new ContactChatUnavailableError();
   }
-  return { ok: true, status: res.status, body: parsed };
+  const receiptId = parseReceiptId(parsed);
+  return { ok: true, status: res.status, body: parsed, ...(receiptId ? { receiptId } : {}) };
 }

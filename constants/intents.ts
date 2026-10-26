@@ -47,8 +47,12 @@ export const CONTACT_INTENT_LABELS: Record<ContactIntent, Record<Locale, string>
  * Visitor-facing purpose groups. The seven canonical intent keys remain the
  * routing contract; this catalog only controls how choices are presented.
  * The three Grift-related intents intentionally share one button. A new
- * selection uses estimate-audit as the representative key, while legacy URLs
+ * selection uses grift-team-beta as the representative key, while legacy URLs
  * keep their original key and still resolve to this same display group.
+ * Grift is no longer an estimation tool (corsweb ADR-0022): grift-paid-trial
+ * and estimate-audit were withdrawn in 2026-10, and grift-team-beta now means
+ * any Grift inquiry (Grift CLI or the agency trial). Do not label this group
+ * as an estimate system.
  */
 export const CONTACT_INTENT_DISPLAY_OPTIONS = [
   {
@@ -70,12 +74,12 @@ export const CONTACT_INTENT_DISPLAY_OPTIONS = [
     },
   },
   {
-    id: 'ai-estimate-system',
-    primaryIntent: 'estimate-audit',
+    id: 'grift',
+    primaryIntent: 'grift-team-beta',
     intents: ['grift-team-beta', 'grift-paid-trial', 'estimate-audit'],
     label: {
-      ja: 'AI見積もりシステムについて',
-      en: 'About the AI estimate system',
+      ja: 'Griftについて相談したい',
+      en: 'Discuss Grift',
     },
   },
   {

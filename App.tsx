@@ -11,6 +11,7 @@ import FaqResolutionPrompt from './components/FaqResolutionPrompt';
 import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
+import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget } from './utils/chatView';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import {
   isContactChatMock,
@@ -153,7 +154,13 @@ const App: React.FC = () => {
   }, [chatReady, isLoading]);
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+    const list = listRef.current;
+    if (!list) return;
+    if (messageListScrollTarget(messages.length, isLoading, showHandoff) === 'top') {
+      list.scrollTo({ top: 0 });
+      return;
+    }
+    list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
   }, [messages, isLoading, showHandoff]);
 
   const beginRequest = useCallback((kind: 'start' | 'chat' | 'submit'): AbortController => {
@@ -422,7 +429,7 @@ const App: React.FC = () => {
     const controller = beginRequest('submit');
     const handoffMessage = values.message.trim() || conversationSummary.trim() || t('handoffDefaultMessage');
     try {
-      await postContactSubmit({
+      const submitResult = await postContactSubmit({
         sessionId,
         idempotencyKey: idempotencyKeyRef.current,
         name: values.name,
@@ -441,9 +448,10 @@ const App: React.FC = () => {
       setHandoffDraft(EMPTY_HANDOFF_VALUES);
       setSubmitted(true);
       setShowHandoff(false);
+      const success = handoffSuccessMessage(submitResult.receiptId);
       setMessages((prev) => [
         ...prev,
-        { id: uuidv4(), text: t('handoffSuccess'), sender: 'ai', emotion: Emotion.HAPPY },
+        { id: uuidv4(), text: t(success.textKey, success.replacements), sender: 'ai', emotion: Emotion.HAPPY },
       ]);
       setCurrentEmotion(Emotion.HAPPY);
       setApiDegraded(false);
@@ -667,7 +675,7 @@ const App: React.FC = () => {
                 isLoading={isLoading}
                 disabled={!chatReady}
                 inputRef={inputRef}
-                placeholderKey={appMode === 'intake' ? 'typeYourMessageIntake' : 'typeYourMessage'}
+                placeholderKey={chatPlaceholderKey(appMode, chatReady, isLoading, selectedIntent)}
               />
             </div>
           )}

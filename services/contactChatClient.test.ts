@@ -315,4 +315,26 @@ describe('contactChatClient', () => {
       structuredLead: { purpose: '業務システム開発', stage: 'exploring' },
     });
   });
+
+  it('returns the receipt number that the Worker also prints in the receipt email', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      receiptId: 'COR-20261026-1A2B3C4D',
+      status: 'queued',
+    }), { status: 200 })));
+
+    const result = await postContactSubmit({ name: 'Test User', email: 'test@example.com', message: '相談内容' });
+
+    expect(result.receiptId).toBe('COR-20261026-1A2B3C4D');
+  });
+
+  it('drops a missing or malformed receipt number instead of showing it', async () => {
+    for (const body of [{ ok: true }, { ok: true, receiptId: '<img src=x>' }, { ok: true, receiptId: 42 }]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 })));
+
+      const result = await postContactSubmit({ name: 'Test User', email: 'test@example.com', message: '相談内容' });
+
+      expect(result.receiptId).toBeUndefined();
+    }
+  });
 });
