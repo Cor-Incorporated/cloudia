@@ -22,6 +22,7 @@
 | [ADR-0006](./ADR-0006-security-and-spam-layers.md) | セキュリティと spam レイヤ | Accepted 2026-07-10 |
 | [ADR-0007](./ADR-0007-phased-delivery.md) | Phase 1–3 デリバリー | Accepted 2026-07-10 |
 | [ADR-0008](./ADR-0008-cross-repo-canon-reference.md) | クロスリポジトリ契約の正本参照 | Accepted 2026-07-11 |
+| [ADR-0009](./ADR-0009-local-llm-intake-spike.md) | ローカル LLM intake スパイク（feature flag） | Proposed 2026-10-28 |
 
 ## 要件との対応
 

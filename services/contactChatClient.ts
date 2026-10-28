@@ -47,6 +47,12 @@ export interface ContactChatContext {
   intent: ContactIntent | null;
   sessionId?: string | null;
   source?: 'cloudia';
+  /**
+   * Optional Cloudflare Turnstile token. Chat does not require one (ADR-0006);
+   * the contact-chat Worker verifies Turnstile on /submit. The local intake
+   * spike can require it with CLOUDIA_LOCAL_TURNSTILE=required.
+   */
+  turnstileToken?: string | null;
 }
 
 export type ContactChatStartContext = ContactChatContext;
@@ -62,13 +68,31 @@ export class ContactChatUnavailableError extends Error {
   }
 }
 
-function normalizeChatContext(context: ContactChatContext): Required<ContactChatContext> {
+interface NormalizedChatContext {
+  mode: AppMode;
+  locale: Locale;
+  intent: ContactIntent | null;
+  sessionId: string;
+  source: 'cloudia';
+  turnstileToken?: string;
+}
+
+function normalizeTurnstileToken(token: string | null | undefined): string | undefined {
+  if (typeof token !== 'string') return undefined;
+  const trimmed = token.trim();
+  if (!trimmed || trimmed.length > 4096 || /[\s\u0000-\u001F\u007F]/.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+function normalizeChatContext(context: ContactChatContext): NormalizedChatContext {
+  const turnstileToken = normalizeTurnstileToken(context.turnstileToken);
   return {
     mode: context.mode === 'ambassador' ? 'ambassador' : 'intake',
     locale: context.locale === 'ja' ? 'ja' : 'en',
     intent: parseContactIntent(context.intent),
     sessionId: typeof context.sessionId === 'string' && context.sessionId.trim() ? context.sessionId.trim() : '',
     source: 'cloudia',
+    ...(turnstileToken ? { turnstileToken } : {}),
   };
 }
 
@@ -215,6 +239,7 @@ export async function postContactChat(
       intent: normalizedContext.intent,
       source: normalizedContext.source,
       ...(normalizedContext.sessionId ? { sessionId: normalizedContext.sessionId } : {}),
+      ...(normalizedContext.turnstileToken ? { turnstileToken: normalizedContext.turnstileToken } : {}),
     }),
   });
   if (!res.ok) {
@@ -262,6 +287,7 @@ export async function postContactChatStart(
       intent: normalizedContext.intent,
       source: normalizedContext.source,
       ...(normalizedContext.sessionId ? { sessionId: normalizedContext.sessionId } : {}),
+      ...(normalizedContext.turnstileToken ? { turnstileToken: normalizedContext.turnstileToken } : {}),
       start: true,
       event: 'intent_selected',
     }),

@@ -1,5 +1,6 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
+import { localIntakeDevPlugin } from './server/localIntake/devPlugin';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', ['VITE_', '']);
@@ -12,6 +13,7 @@ export default defineConfig(({ mode }) => {
     const robots = env.VITE_ROBOTS || 'index,follow';
     return {
       base,
+      plugins: [localIntakeDevPlugin(env)],
       define: {
         'process.env.GOOGLE_CALENDAR_ICAL_URL': JSON.stringify(env.VITE_GOOGLE_CALENDAR_ICAL_URL || env.GOOGLE_CALENDAR_ICAL_URL),
         'import.meta.env.VITE_ROBOTS': JSON.stringify(robots),
