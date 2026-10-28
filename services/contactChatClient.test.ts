@@ -257,6 +257,33 @@ describe('contactChatClient', () => {
     })).rejects.toBeInstanceOf(ContactChatUnavailableError);
   });
 
+  it('forwards an optional Turnstile token and drops a blank one', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => new Response(JSON.stringify({
+      reply: 'ok',
+      classification: 'genuine',
+      readyForContact: false,
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await postContactChat([{ role: 'user', content: '相談です' }], {
+      mode: 'intake',
+      locale: 'ja',
+      intent: 'local-llm-poc',
+      turnstileToken: '  widget-token  ',
+    });
+    await postContactChat([{ role: 'user', content: '相談です' }], {
+      mode: 'intake',
+      locale: 'ja',
+      intent: null,
+      turnstileToken: '   ',
+    });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
+      turnstileToken: 'widget-token',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body))).not.toHaveProperty('turnstileToken');
+  });
+
   it('trims and bounds the history sent to the gateway', () => {
     const history = Array.from({ length: 25 }, (_, index) => ({
       sender: index % 2 === 0 ? 'user' as const : 'ai' as const,

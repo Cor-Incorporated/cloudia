@@ -9,7 +9,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/scan-bundle-secrets.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:intents": "node constants/intents.selftest.mjs"
