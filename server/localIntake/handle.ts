@@ -4,6 +4,8 @@
  * CLOUDIA_INTAKE_PROVIDER=local. This handler never calls Vertex and
  * never accepts /submit (PII stays on the contact-chat Worker).
  */
+import { isIndustryEntrySource, parseEntrySourceValue, type IndustryEntrySource } from '../../constants/entrySources';
+import { industryContextLine } from '../../constants/industryGuidance';
 import {
   buildLocalSystemPrompt,
   completeLocalIntake,
@@ -204,6 +206,8 @@ export async function handleLocalIntake(request: Request, env: LocalIntakeEnv, d
   const mode = body.mode === 'ambassador' ? 'ambassador' : 'intake';
   const locale = body.locale === 'en' ? 'en' : 'ja';
   const intent = normalizeIntent(body.intent);
+  const parsedEntry = parseEntrySourceValue(body.source);
+  const industry = isIndustryEntrySource(parsedEntry) ? parsedEntry : null;
 
   const gateway = resolveLocalGateway(env);
   const turnstile = await evaluateTurnstile({
@@ -231,7 +235,7 @@ export async function handleLocalIntake(request: Request, env: LocalIntakeEnv, d
   if (isStart) {
     const sessionId = safeSessionId(body.sessionId);
     return finish(json({
-      reply: startReply(mode, locale, intent),
+      reply: startReply(mode, locale, intent, industry),
       classification: 'genuine',
       readyForContact: false,
       summary: intent
@@ -278,7 +282,7 @@ export async function handleLocalIntake(request: Request, env: LocalIntakeEnv, d
   try {
     const completion = await completeLocalIntake({
       config: gateway.config,
-      system: buildLocalSystemPrompt({ mode, locale, intent }),
+      system: buildLocalSystemPrompt({ mode, locale, intent, entrySource: industry }),
       messages: masked,
       fetchImpl: deps.fetchImpl,
       signal: request.signal,
@@ -338,7 +342,14 @@ function safeSessionId(raw: unknown): string {
   return crypto.randomUUID();
 }
 
-function startReply(mode: 'intake' | 'ambassador', locale: 'ja' | 'en', intent: string | null): string {
+function startReply(
+  mode: 'intake' | 'ambassador',
+  locale: 'ja' | 'en',
+  intent: string | null,
+  industry: IndustryEntrySource | null,
+): string {
+  const industryLine = industry ? industryContextLine(industry, locale) : null;
+  if (industryLine) return industryLine;
   if (intent === 'press-speaking-other') {
     return locale === 'en'
       ? 'Thanks. This is a press, speaking, or other public-outreach request. What type of opportunity and topic would you like to discuss?'

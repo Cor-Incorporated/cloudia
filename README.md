@@ -191,11 +191,14 @@ For issues or questions:
 
 | Event | When | Parameters |
 |---|---|---|
-| `contact_chat_view` | once per page view | `intent` (one of the 7 keys), `utm_source`, `utm_medium`, `utm_campaign` (allow-listed values only) |
-| `contact_chat_submit_success` | after the Worker answers an inquiry with 2xx, `ok: true` and a receipt number; once per receipt | `intent` |
+| `contact_chat_view` | once per page view | `intent` (one of the 7 keys), `entry_source` (one of `industry-medical`, `industry-shigyo`, `industry-construction`, `industry-manufacturing`, `industry-education`, `corsweb-contact-primary`, `corsweb-launcher`), `utm_source`, `utm_medium`, `utm_campaign` (allow-listed values only) |
+| `contact_chat_submit_success` | after the Worker answers an inquiry with 2xx, `ok: true` and a receipt number; once per receipt | `intent`, and `entry_source` when the arrival had one |
 
 Never sent: typed text, names, e-mail, phone, conversation, session id, the receipt number, any
-other URL query parameter. gtag.js builds `page_location`, the form events' `form_destination`
+other URL query parameter. A repeated `source`, a different case, or a value that is not on the
+entry-source list is dropped and not written back into the URL. The page URL keeps an accepted
+value as `source`; the event parameter name is `entry_source`. No new GA4 admin setting is
+created by this app. gtag.js builds `page_location`, the form events' `form_destination`
 and `page_referrer` from the real URL and `document.referrer` (the live property ignores the
 values given to `config`; measured 2026-11-08), so at start, before gtag.js loads, the page URL is
 rewritten with `history.replaceState` to the allow-listed query without a hash, and

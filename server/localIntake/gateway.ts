@@ -3,6 +3,8 @@
  * (ai-cluster llm-gateway / Cor OS public alias). Server-only.
  * No implicit fallback to Vertex or to another model alias.
  */
+import { isIndustryEntrySource, parseEntrySourceValue } from '../../constants/entrySources';
+import { industryModelPolicy } from '../../constants/industryGuidance';
 import { parseContactIntent } from '../../constants/intents';
 import type { ContactIntent } from '../../types';
 import {
@@ -94,6 +96,8 @@ export function buildLocalSystemPrompt(opts: {
   mode: 'intake' | 'ambassador';
   locale: 'ja' | 'en';
   intent: ContactIntent | null;
+  /** Untrusted until parseEntrySourceValue accepts it. Only an industry enum is added. */
+  entrySource?: unknown;
 }): string {
   const lines = [
     'You are Cloudia, the AI receptionist for Cor.株式会社.',
@@ -115,6 +119,10 @@ export function buildLocalSystemPrompt(opts: {
   ];
   if (opts.intent) {
     lines.push(`Server-provided intent (authoritative, do not replace it): ${opts.intent}.`);
+  }
+  const entry = parseEntrySourceValue(opts.entrySource);
+  if (isIndustryEntrySource(entry)) {
+    lines.push(industryModelPolicy(entry));
   }
   return lines.join('\n');
 }
