@@ -109,7 +109,27 @@ export function industryGuidance(source: IndustryEntrySource): IndustryGuidance 
   }
 }
 
-/** Visitor-facing opening plus the one question. Null unless `raw` is an industry enum. */
+/** The safety sentence only. Null unless `raw` is an industry enum. */
+export function industryOpening(raw: unknown, locale: Locale | string): string | null {
+  const entry = parseEntrySourceValue(raw);
+  if (!isIndustryEntrySource(entry)) return null;
+  return industryGuidance(entry).opening[contactCopyLocale(locale)];
+}
+
+/**
+ * First sentence of the opening. corsweb's start reply (PR 510, unmerged)
+ * reuses this sentence and then asks an intent-specific question, sometimes
+ * without a newline. Matching the whole Cloudia line would miss that reply.
+ */
+export function industryReceptionMarker(raw: unknown, locale: Locale | string): string | null {
+  const opening = industryOpening(raw, locale);
+  if (!opening) return null;
+  const stop = contactCopyLocale(locale) === 'ja' ? '。' : '.';
+  const end = opening.indexOf(stop);
+  return end < 0 ? opening : opening.slice(0, end + stop.length);
+}
+
+/** Visitor-facing opening plus the one fallback question. Null unless `raw` is an industry enum. */
 export function industryContextLine(raw: unknown, locale: Locale | string): string | null {
   const entry = parseEntrySourceValue(raw);
   if (!isIndustryEntrySource(entry)) return null;
@@ -131,17 +151,67 @@ export interface IndustryContextMessage {
   content: string;
 }
 
+export interface IndustryThreadMessage {
+  role?: 'user' | 'assistant';
+  content?: string;
+  sender?: 'user' | 'ai';
+  text?: string;
+}
+
+function messageRole(message: IndustryThreadMessage): 'user' | 'assistant' | null {
+  if (message.role === 'user' || message.role === 'assistant') return message.role;
+  if (message.sender === 'ai') return 'assistant';
+  if (message.sender === 'user') return 'user';
+  return null;
+}
+
+function messageText(message: IndustryThreadMessage): string {
+  return message.content ?? message.text ?? '';
+}
+
+/** True when an assistant turn already carries the industry reception. User text does not count. */
+export function historyHasIndustryReception(
+  messages: readonly IndustryThreadMessage[],
+  rawSource: unknown,
+  locale: Locale | string,
+): boolean {
+  const marker = industryReceptionMarker(rawSource, locale);
+  if (!marker) return false;
+  return messages.some((message) => messageRole(message) === 'assistant' && messageText(message).includes(marker));
+}
+
 /**
- * Puts the industry line into the transcript sent to the contact API, and
- * keeps it there on later turns. The line is the fixed copy for that enum,
- * never the raw query. The list stays within the Worker's message cap, with
- * the industry line kept.
+ * What the industry panel may add beside the thread.
+ * - heading: the short label. The first reply already contains the reception.
+ * - boundary: the safety sentence, before a first reply exists.
+ * - question: the one fallback question, when the first reply is missing or generic.
+ * - none: this entry is not an industry.
+ */
+export function industryNotice(input: {
+  rawSource: unknown;
+  locale: Locale | string;
+  messages: readonly IndustryThreadMessage[];
+  startSettled: boolean;
+}): 'none' | 'heading' | 'boundary' | 'question' {
+  if (!industryContextLine(input.rawSource, input.locale)) return 'none';
+  if (historyHasIndustryReception(input.messages, input.rawSource, input.locale)) return 'heading';
+  return input.startSettled ? 'question' : 'boundary';
+}
+
+/**
+ * Adds the fixed industry line to a later chat turn only while the thread
+ * has no industry reception yet. A reply that already contains the marker
+ * stays as it is: this does not delete it and does not add a second question.
+ * The line is the enum's copy, never the raw query.
  */
 export function withIndustryContext<T extends IndustryContextMessage>(
   messages: readonly T[],
   rawSource: unknown,
-  locale: Locale,
+  locale: Locale | string,
 ): T[] {
+  if (historyHasIndustryReception(messages, rawSource, locale)) {
+    return [...messages].slice(-MAX_CHAT_MESSAGES);
+  }
   const line = industryContextLine(rawSource, locale);
   if (!line) return [...messages].slice(-MAX_CHAT_MESSAGES);
   const context = { role: 'assistant' as const, content: line };

@@ -286,8 +286,9 @@ export async function postContactChat(
 
 /**
  * Starts an intake conversation after the visitor chooses an intent.
- * The selected intent is carried as context; no synthetic user message is
- * added to the visible conversation history.
+ * The selected intent and the validated entry source are the start context.
+ * The industry question is not copied into this request: the Worker writes
+ * the first reply, and a second copy here would sit beside that reply.
  */
 export async function postContactChatStart(
   messages: ContactChatMessage[],
@@ -295,7 +296,7 @@ export async function postContactChatStart(
   options: ContactChatRequestOptions = {},
 ): Promise<ChatResult> {
   const normalizedContext = normalizeChatContext(context);
-  const outboundMessages = withIndustryContext(messages, normalizedContext.source, normalizedContext.locale);
+  const outboundMessages = messages.slice(-20);
   if (isContactChatMock()) {
     return {
       reply: normalizedContext.locale === 'ja'

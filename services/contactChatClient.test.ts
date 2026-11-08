@@ -375,6 +375,35 @@ describe('contactChatClient', () => {
     });
   });
 
+  it('does not send a second industry question on start, and keeps a worker reply in later turns', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      reply: 'ok',
+      classification: 'genuine',
+      readyForContact: false,
+    }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    vi.stubGlobal('fetch', fetchMock);
+    const workerReply = '医療のページから開いています。患者さんの記録、症状、個人名は書かないでください。ここでは診断も、結果の保証もしません。機密として扱う範囲を確かめる相談として、外に出せない情報の種類を、作業の名前だけで教えてください。';
+
+    await postContactChatStart([{ role: 'assistant', content: 'ようこそ。' }], {
+      mode: 'intake',
+      locale: 'ja',
+      intent: 'confidential-ai-assessment',
+      entrySource: 'industry-medical',
+    });
+    await postContactChat(
+      [{ role: 'assistant', content: 'ようこそ。' }, { role: 'assistant', content: workerReply }, { role: 'user', content: '受付の作業です。' }],
+      { mode: 'intake', locale: 'ja', intent: 'confidential-ai-assessment', entrySource: 'industry-medical' },
+    );
+
+    const startBody = JSON.parse(String(fetchMock.mock.calls[0][1].body)) as { source: string; messages: { content: string }[] };
+    const laterBody = JSON.parse(String(fetchMock.mock.calls[1][1].body)) as { source: string; messages: { content: string }[] };
+    expect(startBody.source).toBe('industry-medical');
+    expect(startBody.messages.map((message) => message.content)).toEqual(['ようこそ。']);
+    expect(JSON.stringify(startBody)).not.toContain('受付、記録の下書き');
+    expect(laterBody.messages.map((message) => message.content)).toEqual(['ようこそ。', workerReply, '受付の作業です。']);
+    expect(laterBody.messages.filter((message) => message.content === workerReply)).toHaveLength(1);
+  });
+
   it('sends an industry enum as the traffic source and keeps that line in later turns', async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
       reply: '承知しました。',

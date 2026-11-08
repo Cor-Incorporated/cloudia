@@ -14,7 +14,7 @@ import { resolveAppMode } from './utils/appMode';
 import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget } from './utils/chatView';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import { parseEntrySourceFromSearch } from './constants/entrySources';
-import { industryContextLine, industryLabel } from './constants/industryGuidance';
+import { industryContextLine, industryLabel, industryNotice, industryOpening } from './constants/industryGuidance';
 import { showDirectHandoff, showReadyHandoff } from './utils/inquiryPath';
 import {
   isContactChatMock,
@@ -102,6 +102,7 @@ const App: React.FC = () => {
     return parseEntrySourceFromSearch(window.location.search);
   }, []);
   const industryLine = industryContextLine(entrySource, locale);
+  const industryLead = industryOpening(entrySource, locale);
   const industryName = industryLabel(entrySource, locale);
   const [sessionId, setSessionId] = useState<string | null>(() => readSessionId(appMode, locale, selectedIntent));
   const idempotencyKeyRef = useRef(uuidv4());
@@ -496,7 +497,12 @@ const App: React.FC = () => {
   };
   const readyHandoffVisible = showReadyHandoff(pathInput);
   const directHandoffVisible = showDirectHandoff(pathInput);
-  const industryInThread = industryLine != null && messages.some((message) => message.text === industryLine);
+  const notice = industryNotice({
+    rawSource: entrySource,
+    locale,
+    messages,
+    startSettled: intentStartState === 'started' || apiDegraded,
+  });
   const shellClass = embedMode
     ? 'flex h-dvh min-h-[520px] w-full overflow-hidden bg-slate-100 text-slate-900'
     : 'flex h-dvh min-h-dvh overflow-hidden bg-slate-100 text-slate-900';
@@ -693,14 +699,17 @@ const App: React.FC = () => {
 
           {!showHandoff && !submitted && !faqResolved && appMode === 'intake' && (
             <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-4 py-3">
-              {industryLine && !industryInThread && (
+              {notice === 'boundary' && industryLead && (
+                <p className="max-w-2xl text-sm leading-relaxed text-slate-800" role="note">{industryLead}</p>
+              )}
+              {notice === 'question' && industryLine && (
                 <div className="max-w-2xl space-y-1" role="note">
                   {industryLine.split('\n').map((paragraph) => (
                     <p key={paragraph} className="text-sm leading-relaxed text-slate-800">{paragraph}</p>
                   ))}
                 </div>
               )}
-              {industryName && (
+              {notice !== 'none' && industryName && (
                 <p className="text-xs text-slate-500" role="status">{t('industryContextLabel', { label: industryName })}</p>
               )}
               <p className="text-xs leading-relaxed text-slate-500">{t('unavailableExtensions')}</p>
