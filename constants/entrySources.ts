@@ -1,14 +1,16 @@
 /**
  * Entry sources the contact chat may keep.
  *
- * corsweb puts `source` on the chat URL (industry pages, the contact page, the
- * launcher). The query is untrusted. Only an exact member of this list becomes
- * an entry source. Unknown values, a repeated `source`, and anything that
- * looks like an address or other personal data are dropped and never copied
- * into the URL, GA4, or the chat request.
+ * Contract: corsweb docs/industry-chat-worker-contract-2026-11-08.md
+ * at 291af3fa0b3b0c79309b374c8550ed128c2d521f (PR 510, unmerged).
+ * The Worker trims and then exact-matches. This client does not trim a
+ * different string into a token. Unknown values, a repeated `source`, and
+ * anything that looks like an address or a phone number are dropped and never
+ * copied into the URL, GA4, or the chat request.
  *
- * `cloudia` is the client tag used when no allow-listed entry source is
- * present. It is not an entry source: the page did not arrive with it.
+ * The five industry tokens are the only ones that change the first reply.
+ * The other tokens are known generic tags. They are not industries.
+ * `cloudia` is what we send when the page has no allow-listed source.
  */
 
 export const INDUSTRY_ENTRY_SOURCES = [
@@ -21,10 +23,11 @@ export const INDUSTRY_ENTRY_SOURCES = [
 
 export type IndustryEntrySource = (typeof INDUSTRY_ENTRY_SOURCES)[number];
 
-/** Entry points that are not an industry page, but are known and still measured. */
+/** Known generic tags. Not industries, so they do not add an industry question. */
 export const OTHER_ENTRY_SOURCES = [
   'corsweb-contact-primary',
   'corsweb-launcher',
+  'corsweb-launcher-fallback',
 ] as const;
 
 export type OtherEntrySource = (typeof OTHER_ENTRY_SOURCES)[number];

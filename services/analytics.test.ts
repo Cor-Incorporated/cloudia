@@ -65,6 +65,7 @@ describe('sanitizePageLocation', () => {
     'industry-education',
     'corsweb-contact-primary',
     'corsweb-launcher',
+    'corsweb-launcher-fallback',
   ])('keeps the allow-listed entry source %s and drops personal data beside it', (source) => {
     expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', `?source=${source}&email=taro%40example.com&q=secret`)).toBe(
       `https://cor-jp.com/contact/chat/?source=${source}`,

@@ -70,8 +70,9 @@ describe('industry opening', () => {
   });
 });
 
-// Shape of corsweb workers/contact-chat industry-context.ts at 4c7e292 (PR 510, unmerged).
-// Boundary and question are concatenated with no newline. Questions differ by intent.
+// Shape of corsweb workers/contact-chat industry-context.ts at PR 510 head
+// 291af3fa (unchanged in that commit). Boundary and question are concatenated
+// with no newline. Questions differ by intent.
 const WORKER_MEDICAL_ASSESSMENT = '医療のページから開いています。患者さんの記録、症状、個人名は書かないでください。ここでは診断も、結果の保証もしません。機密として扱う範囲を確かめる相談として、外に出せない情報の種類を、作業の名前だけで教えてください。';
 const WORKER_CONSTRUCTION = '建設のページから開いています。図面、施主名、契約書は書かないでください。工期や安全の適合は、ここでは断定しません。現場の記録、見積りの整理、社内の調べもののどれに近いご相談ですか。';
 const WORKER_SHIGYO_GENERAL = '士業のページから開いています。依頼者名や案件の中身は書かないでください。法律や税務の結論は出しません。契約書の確認、申請、期日の管理のどれに近いご相談ですか。';
@@ -140,6 +141,12 @@ describe('industry notice beside a worker first reply', () => {
       rawSource: 'corsweb-launcher',
       locale: 'ja',
       messages: welcome,
+      startSettled: true,
+    })).toBe('none');
+    expect(industryNotice({
+      rawSource: 'corsweb-launcher-fallback',
+      locale: 'ja',
+      messages: [...welcome, { sender: 'ai', text: GENERIC_START }],
       startSettled: true,
     })).toBe('none');
   });

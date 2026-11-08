@@ -191,7 +191,7 @@ For issues or questions:
 
 | Event | When | Parameters |
 |---|---|---|
-| `contact_chat_view` | once per page view | `intent` (one of the 7 keys), `entry_source` (one of `industry-medical`, `industry-shigyo`, `industry-construction`, `industry-manufacturing`, `industry-education`, `corsweb-contact-primary`, `corsweb-launcher`), `utm_source`, `utm_medium`, `utm_campaign` (allow-listed values only) |
+| `contact_chat_view` | once per page view | `intent` (one of the 7 keys), `entry_source` (one of `industry-medical`, `industry-shigyo`, `industry-construction`, `industry-manufacturing`, `industry-education`, `corsweb-contact-primary`, `corsweb-launcher`, `corsweb-launcher-fallback`), `utm_source`, `utm_medium`, `utm_campaign` (allow-listed values only) |
 | `contact_chat_submit_success` | after the Worker answers an inquiry with 2xx, `ok: true` and a receipt number; once per receipt | `intent`, and `entry_source` when the arrival had one |
 
 Never sent: typed text, names, e-mail, phone, conversation, session id, the receipt number, any

@@ -117,8 +117,9 @@ export function industryOpening(raw: unknown, locale: Locale | string): string |
 }
 
 /**
- * First sentence of the opening. corsweb's start reply (PR 510, unmerged)
- * reuses this sentence and then asks an intent-specific question, sometimes
+ * First sentence of the opening. corsweb's start reply (PR 510 head
+ * 291af3fa, contract docs/industry-chat-worker-contract-2026-11-08.md)
+ * reuses this sentence and then asks one intent-specific question, sometimes
  * without a newline. Matching the whole Cloudia line would miss that reply.
  */
 export function industryReceptionMarker(raw: unknown, locale: Locale | string): string | null {

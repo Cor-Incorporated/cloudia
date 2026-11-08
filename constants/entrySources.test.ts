@@ -45,7 +45,9 @@ describe('parseEntrySourceFromSearch', () => {
     expect(parseEntrySourceFromSearch(`?source=${encodeURIComponent(ATTACK)}`)).toBeNull();
   });
 
-  it('lists five industries', () => {
+  it('lists five industries and keeps the launcher fallback as a generic tag', () => {
     expect(INDUSTRY_ENTRY_SOURCES).toHaveLength(5);
+    expect(parseEntrySourceValue('corsweb-launcher-fallback')).toBe('corsweb-launcher-fallback');
+    expect(INDUSTRY_ENTRY_SOURCES).not.toContain('corsweb-launcher-fallback');
   });
 });
