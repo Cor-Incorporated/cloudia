@@ -223,6 +223,37 @@ describe('contactChatClient', () => {
     });
   });
 
+  it('uses English industry copy when the locale is not ja or en', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      reply: 'ok',
+      classification: 'genuine',
+      readyForContact: false,
+    }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    for (const locale of ['zh', 'ko', 'es'] as const) {
+      await postContactChat(
+        [{ role: 'user', content: 'hello' }],
+        {
+          mode: 'intake',
+          locale: locale as 'en',
+          intent: 'confidential-ai-assessment',
+          entrySource: 'industry-medical',
+        },
+      );
+    }
+
+    for (const call of fetchMock.mock.calls) {
+      const body = JSON.parse(String(call[1].body)) as { locale: string; source: string; messages: { content: string }[] };
+      expect(body.locale).toBe('en');
+      expect(body.source).toBe('industry-medical');
+      const line = industryContextLine('industry-medical', 'en');
+      expect(body.messages.some((message) => message.content === line)).toBe(true);
+      expect(JSON.stringify(body)).not.toContain('undefined');
+      expect(JSON.stringify(body)).not.toContain('患者');
+    }
+  });
+
   it('normalizes untrusted context values at the network boundary', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       reply: 'ok',

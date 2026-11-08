@@ -10,6 +10,7 @@
  * been checked against the industry enum, and these functions check again.
  */
 import type { Locale } from '../translations';
+import { contactCopyLocale } from '../utils/contactLocale';
 import {
   isIndustryEntrySource,
   parseEntrySourceValue,
@@ -109,17 +110,18 @@ export function industryGuidance(source: IndustryEntrySource): IndustryGuidance 
 }
 
 /** Visitor-facing opening plus the one question. Null unless `raw` is an industry enum. */
-export function industryContextLine(raw: unknown, locale: Locale): string | null {
+export function industryContextLine(raw: unknown, locale: Locale | string): string | null {
   const entry = parseEntrySourceValue(raw);
   if (!isIndustryEntrySource(entry)) return null;
   const guidance = industryGuidance(entry);
-  return `${guidance.opening[locale]}\n${guidance.question[locale]}`;
+  const copyLocale = contactCopyLocale(locale);
+  return `${guidance.opening[copyLocale]}\n${guidance.question[copyLocale]}`;
 }
 
-export function industryLabel(raw: unknown, locale: Locale): string | null {
+export function industryLabel(raw: unknown, locale: Locale | string): string | null {
   const entry = parseEntrySourceValue(raw);
   if (!isIndustryEntrySource(entry)) return null;
-  return industryGuidance(entry).label[locale];
+  return industryGuidance(entry).label[contactCopyLocale(locale)];
 }
 
 const MAX_CHAT_MESSAGES = 20;
