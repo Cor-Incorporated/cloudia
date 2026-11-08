@@ -182,5 +182,42 @@ For issues or questions:
 - Env:
   - `VITE_CONTACT_API_BASE` — e.g. empty for same-origin, or Preview Worker origin
   - `VITE_CONTACT_CHAT_MOCK=1` — mock chat/submit for local UI QA
+  - `VITE_GA4_ID` — GA4 measurement ID (`G-…`), read at build time. Unset means no analytics (see below)
 - **Embed**: open with `?embed=1` for compact header (iframe /corsweb #254)
+
+## Analytics (GA4)
+
+`services/analytics.ts` sends two GA4 events from `cor-jp.com/contact/chat/`, and nothing else:
+
+| Event | When | Parameters |
+|---|---|---|
+| `contact_chat_view` | once per page view | `intent` (one of the 7 keys), `utm_source`, `utm_medium`, `utm_campaign` (allow-listed values only) |
+| `contact_chat_submit_success` | after the Worker answers an inquiry with 2xx, `ok: true` and a receipt number; once per receipt | `intent` |
+
+Never sent: typed text, names, e-mail, phone, conversation, session id, the receipt number, any
+other URL query parameter. gtag.js builds `page_location`, the form events' `form_destination`
+and `page_referrer` from the real URL and `document.referrer` (the live property ignores the
+values given to `config`; measured 2026-11-08), so at start, before gtag.js loads, the page URL is
+rewritten with `history.replaceState` to the allow-listed query without a hash, and
+`document.referrer` to its origin and path. If either rewrite fails, nothing is loaded. A 200
+without a receipt (the honeypot answer) is not a completion.
+
+The GA4 stream's "Page changes based on browser history events" setting is on, so picking an
+intent (the app writes `?intent=`) adds one more automatic `page_view`. It carries the cleaned URL
+only. Turning that setting off in GA4 removes the extra page view.
+
+It is off when `VITE_GA4_ID` is unset or not `G-XXXX`, when the host is not `cor-jp.com`, in the
+launcher iframe (`?embed=1`) and in the ambassador demo. There is no consent banner to wait for:
+corsweb has none, and the disclosure is in its privacy policy.
+
+`cloudia-contact` is a direct-upload Pages project (no Git integration), so variables set in the
+Pages dashboard do not reach the build. Put the ID in the environment of whoever runs the build,
+using the same value as corsweb's `PUBLIC_GA4_ID`:
+
+```bash
+VITE_GA4_ID=G-XXXXXXXXXX npm run build
+npx wrangler pages deploy dist --project-name cloudia-contact --branch main
+```
+
+To turn it off, build without `VITE_GA4_ID` and deploy again.
 - **LINE UI**: left Cloudia avatar + bubble, right user bubble; plain-text replies

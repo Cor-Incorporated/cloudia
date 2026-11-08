@@ -17,12 +17,12 @@ import {
   isContactChatMock,
   postContactChat,
   postContactChatStart,
-  postContactSubmit,
   toApiMessages,
   type Classification as ApiClassification,
   type StructuredLead,
   type ChatResult,
 } from './services/contactChatClient';
+import { submitContactInquiry } from './services/submitWithAnalytics';
 
 // Classification re-export helper
 type Classif = ApiClassification;
@@ -429,7 +429,7 @@ const App: React.FC = () => {
     const controller = beginRequest('submit');
     const handoffMessage = values.message.trim() || conversationSummary.trim() || t('handoffDefaultMessage');
     try {
-      const submitResult = await postContactSubmit({
+      const submitResult = await submitContactInquiry({
         sessionId,
         idempotencyKey: idempotencyKeyRef.current,
         name: values.name,
