@@ -195,9 +195,16 @@ For issues or questions:
 | `contact_chat_submit_success` | after the Worker answers an inquiry with 2xx, `ok: true` and a receipt number; once per receipt | `intent` |
 
 Never sent: typed text, names, e-mail, phone, conversation, session id, the receipt number, any
-other URL query parameter. `page_location` and `page_referrer` are rewritten to drop the query
-and hash, and the handoff form has a fixed `action` so GA4's form events cannot report the
-visitor's URL. A 200 without a receipt (the honeypot answer) is not a completion.
+other URL query parameter. gtag.js builds `page_location`, the form events' `form_destination`
+and `page_referrer` from the real URL and `document.referrer` (the live property ignores the
+values given to `config`; measured 2026-11-08), so at start, before gtag.js loads, the page URL is
+rewritten with `history.replaceState` to the allow-listed query without a hash, and
+`document.referrer` to its origin and path. If either rewrite fails, nothing is loaded. A 200
+without a receipt (the honeypot answer) is not a completion.
+
+The GA4 stream's "Page changes based on browser history events" setting is on, so picking an
+intent (the app writes `?intent=`) adds one more automatic `page_view`. It carries the cleaned URL
+only. Turning that setting off in GA4 removes the extra page view.
 
 It is off when `VITE_GA4_ID` is unset or not `G-XXXX`, when the host is not `cor-jp.com`, in the
 launcher iframe (`?embed=1`) and in the ambassador demo. There is no consent banner to wait for:

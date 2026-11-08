@@ -131,6 +131,17 @@ describe('submitContactInquiry', () => {
     }
   });
 
+  it('still resolves with the Worker result when the tracker throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: true, receiptId: RECEIPT, status: 'queued', duplicate: false })));
+    const brokenTracker = {
+      trackSubmitSuccess: () => {
+        throw new Error('analytics is broken');
+      },
+    };
+
+    await expect(submitContactInquiry(payload, {}, brokenTracker)).resolves.toMatchObject({ ok: true, receiptId: RECEIPT });
+  });
+
   it('still returns the Worker result unchanged', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ok: true, receiptId: RECEIPT, status: 'queued', duplicate: false })));
     const { analytics } = startedTracker();

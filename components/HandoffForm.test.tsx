@@ -33,11 +33,6 @@ describe('HandoffForm', () => {
     expect(markup).toContain('会社名（任意）');
   });
 
-  it('has a fixed action so analytics form events cannot pick up the visitor URL', () => {
-    // Without an action attribute, form.action is the page URL including its query string.
-    expect(renderForm()).toMatch(/<form[^>]*action="\/"/);
-  });
-
   it('puts the submit button before the secondary actions', () => {
     const markup = renderForm();
     const submit = markup.indexOf('問い合わせを送信');

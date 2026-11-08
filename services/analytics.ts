@@ -8,8 +8,10 @@
  * Privacy boundary: the only values that leave the page are the event names, the
  * intent key and allow-listed utm values (see ALLOWED_UTM). Typed text, names,
  * e-mail addresses, conversation, session ids, receipt numbers and arbitrary URL
- * query parameters are never sent. page_location and page_referrer are rewritten
- * so the automatic page view cannot carry them either.
+ * query parameters are never sent. gtag.js builds page_location, form_destination and
+ * page_referrer from the real URL and document.referrer, so start() first rewrites the
+ * visible URL (history.replaceState: allow-listed query, no hash) and document.referrer
+ * (origin and path only), then loads gtag.js. If either rewrite fails, nothing is loaded.
  *
  * Loading follows corsweb's Analytics.astro (gtag.js straight from Google, the ID
  * validated as G-XXXX, production host only, nothing in the launcher iframe), so
@@ -58,7 +60,11 @@ export interface AnalyticsScriptElement {
 }
 
 export interface AnalyticsWindow {
-  location: { hostname: string; origin: string; pathname: string; search: string };
+  location: { hostname: string; origin: string; pathname: string; search: string; hash: string };
+  history: {
+    state: unknown;
+    replaceState: (data: unknown, unused: string, url?: string | null) => void;
+  };
   document: {
     referrer: string;
     head: { appendChild: (node: AnalyticsScriptElement) => unknown };
@@ -97,9 +103,19 @@ export function allowedParams(search: string): AnalyticsParams {
   return Object.fromEntries([...(intent ? [['intent', intent]] : []), ...utm]) as AnalyticsParams;
 }
 
+/**
+ * The query the page URL may keep: the event values plus the `locale` the app reads
+ * (LanguageContext accepts exactly 'ja' or 'en'). Anything else is dropped.
+ */
+export function allowedQuery(search: string): string {
+  const locale = new URLSearchParams(search).get('locale');
+  const keptLocale: [string, string][] = locale === 'ja' || locale === 'en' ? [['locale', locale]] : [];
+  return new URLSearchParams([...Object.entries(allowedParams(search)), ...keptLocale]).toString();
+}
+
 /** origin + path + allow-listed query. The hash and every other parameter are dropped. */
 export function sanitizePageLocation(origin: string, pathname: string, search: string): string {
-  const query = new URLSearchParams(Object.entries(allowedParams(search))).toString();
+  const query = allowedQuery(search);
   return `${origin}${pathname}${query ? `?${query}` : ''}`;
 }
 
@@ -191,16 +207,34 @@ export function createAnalytics(win: AnalyticsWindow | undefined, rawGa4Id: stri
     start() {
       if (!isEnabled(win) || win.__corChatGa4Started) return;
       win.__corChatGa4Started = true;
-      const gtag = loadGtag(win, ga4Id);
+      const { origin, pathname, search, hash } = win.location;
+      const pageLocation = sanitizePageLocation(origin, pathname, search);
+      const cleanSearch = pageLocation.slice(`${origin}${pathname}`.length);
       const referrer = sanitizeReferrer(win.document.referrer);
+      // gtag.js builds page_location (the automatic page_view, scroll, the history-change
+      // page_view after the app rewrites ?intent=), the form events' form_destination (the
+      // whole URL, hash included) and page_referrer from the real URL and document.referrer.
+      // With the live property's settings it ignores the page_location / page_referrer given
+      // to `config` (measured 2026-11-08). So the real URL and document.referrer are cleaned
+      // first, before gtag.js can read them. If either fails, nothing is loaded.
+      try {
+        if (cleanSearch !== search || hash !== '') {
+          win.history.replaceState(win.history.state, '', `${pathname}${cleanSearch}`);
+        }
+        if (win.document.referrer !== referrer) {
+          Object.defineProperty(win.document, 'referrer', { value: referrer, configurable: true });
+        }
+      } catch {
+        return;
+      }
+      const gtag = loadGtag(win, ga4Id);
       gtag('js', new Date());
-      // page_location / page_referrer are set here so the automatic page view, and any
-      // later automatic event, sees the cleaned values instead of the raw URL.
+      // Also given to `config` as a backstop for tag settings that do honour it.
       gtag('config', ga4Id, {
-        page_location: sanitizePageLocation(win.location.origin, win.location.pathname, win.location.search),
+        page_location: pageLocation,
         ...(referrer ? { page_referrer: referrer } : {}),
       });
-      gtag('event', CONTACT_CHAT_VIEW_EVENT, allowedParams(win.location.search));
+      gtag('event', CONTACT_CHAT_VIEW_EVENT, allowedParams(search));
     },
 
     trackSubmitSuccess(receiptId, intent) {

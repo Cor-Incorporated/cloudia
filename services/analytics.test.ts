@@ -57,6 +57,17 @@ describe('sanitizePageLocation', () => {
     );
   });
 
+  it('keeps the locale the app reads, and only the exact values ja and en', () => {
+    expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', '?locale=en&email=a%40b.com')).toBe(
+      'https://cor-jp.com/contact/chat/?locale=en',
+    );
+    for (const bad of ['fr', 'EN', ' ja', '']) {
+      expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', `?locale=${encodeURIComponent(bad)}`)).toBe(
+        'https://cor-jp.com/contact/chat/',
+      );
+    }
+  });
+
   it('uses the first value when a parameter is repeated and ignores a bad first value', () => {
     expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', '?intent=local-llm-poc&intent=contract-dev')).toBe(
       'https://cor-jp.com/contact/chat/?intent=local-llm-poc',
@@ -175,6 +186,105 @@ describe('createAnalytics: arrival', () => {
     createAnalytics(second, TEST_GA4_ID).start();
     expect(eventsNamed(first, 'contact_chat_view')).toHaveLength(1);
     expect(eventsNamed(second, 'contact_chat_view')).toHaveLength(1);
+  });
+});
+
+// Measured 2026-11-08 with the live property's settings: gtag.js ignores the page_location
+// given to `config` and builds `dl` (and the history-change page_view) from the real URL.
+// So the real URL itself has to be clean before gtag.js loads.
+describe('createAnalytics: the real URL', () => {
+  it('rewrites the visible URL to the allow-listed form before gtag.js loads', () => {
+    const win = createFakeWindow({
+      search: '?email=taro%40example.com&ref=xyz&utm_source=grift&utm_medium=cta&intent=grift-team-beta&source=grift-lp-hero',
+      hash: '#note',
+    });
+    createAnalytics(win, TEST_GA4_ID).start();
+
+    expect(win.replaceStateCalls).toEqual(['/contact/chat/?intent=grift-team-beta&utm_source=grift&utm_medium=cta']);
+    expect(win.location.search).toBe('?intent=grift-team-beta&utm_source=grift&utm_medium=cta');
+    expect(win.location.hash).toBe('');
+    expect(win.order).toEqual(['replaceState', 'script']); // the URL is clean before the script is added
+  });
+
+  it('drops a hash even when the query is already clean (form events report the whole URL)', () => {
+    const win = createFakeWindow({ search: '?intent=local-llm-poc', hash: '#note' });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(win.replaceStateCalls).toEqual(['/contact/chat/?intent=local-llm-poc']);
+    expect(win.location.hash).toBe('');
+  });
+
+  it('replaces document.referrer with its origin and path before gtag.js reads it', () => {
+    const win = createFakeWindow({ referrer: 'https://cor-jp.com/contact/?token=abc&name=taro#x' });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(win.document.referrer).toBe('https://cor-jp.com/contact/');
+    expect(dataLayerEntries(win)[1]).toEqual(['config', TEST_GA4_ID, expect.objectContaining({ page_referrer: 'https://cor-jp.com/contact/' })]);
+    expect(JSON.stringify(dataLayerEntries(win))).not.toContain('token');
+  });
+
+  it('leaves a referrer that is already origin-only, and an empty one, alone', () => {
+    const origin = createFakeWindow({ referrer: 'https://griftai.org/' });
+    createAnalytics(origin, TEST_GA4_ID).start();
+    expect(origin.document.referrer).toBe('https://griftai.org/');
+    const none = createFakeWindow();
+    createAnalytics(none, TEST_GA4_ID).start();
+    expect(none.document.referrer).toBe('');
+  });
+
+  it('fails closed when the referrer cannot be replaced', () => {
+    const win = createFakeWindow({ referrer: 'https://cor-jp.com/contact/?token=abc', referrerLocked: true });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(win.scripts).toHaveLength(0);
+    expect(win.dataLayer).toBeUndefined();
+  });
+
+  it('keeps the locale in the URL but never in the event parameters', () => {
+    const win = createFakeWindow({ search: '?locale=en&intent=local-llm-poc&ref=xyz', hash: '#top' });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(win.location.search).toBe('?intent=local-llm-poc&locale=en');
+    expect(eventsNamed(win, 'contact_chat_view')).toEqual([{ intent: 'local-llm-poc' }]);
+  });
+
+  it('keeps the locale the app reads while it cleans the rest', () => {
+    const win = createFakeWindow({ search: '?locale=en&ref=xyz' });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(win.replaceStateCalls).toEqual(['/contact/chat/?locale=en']);
+  });
+
+  it('leaves a URL that is already clean untouched', () => {
+    const win = createFakeWindow({ search: '?intent=local-llm-poc&utm_source=grift' });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(win.replaceStateCalls).toEqual([]);
+    expect(win.order).toEqual(['script']);
+  });
+
+  it('does not touch the URL when it stays silent', () => {
+    const win = createFakeWindow({ hostname: 'localhost', search: '?ref=xyz' });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(win.replaceStateCalls).toEqual([]);
+    expect(win.location.search).toBe('?ref=xyz');
+  });
+
+  it('fails closed: if the URL cannot be rewritten, gtag.js is not loaded', () => {
+    const win = createFakeWindow({ search: '?ref=xyz', replaceStateThrows: true });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(win.scripts).toHaveLength(0);
+    expect(win.dataLayer).toBeUndefined();
+    expect(win.gtag).toBeUndefined();
+  });
+
+  it('keeps the URL the app writes later on the allow-list (picking an intent only adds `intent`)', () => {
+    const win = createFakeWindow({ search: '?ref=xyz&utm_source=grift' });
+    createAnalytics(win, TEST_GA4_ID).start();
+
+    // What App.tsx does on an intent pick: start from the current URL and set `intent`.
+    const next = new URL(`${win.location.origin}${win.location.pathname}${win.location.search}`);
+    next.searchParams.set('intent', 'contract-dev');
+
+    // Nothing the cleaner would drop is left in the URL (order does not matter).
+    const sanitized = new URL(sanitizePageLocation(win.location.origin, next.pathname, next.search));
+    const sortedEntries = (params: URLSearchParams) => [...params.entries()].sort(([a], [b]) => a.localeCompare(b));
+    expect(sortedEntries(sanitized.searchParams)).toEqual(sortedEntries(next.searchParams));
+    expect(sortedEntries(next.searchParams)).toEqual([['intent', 'contract-dev'], ['utm_source', 'grift']]);
   });
 });
 
