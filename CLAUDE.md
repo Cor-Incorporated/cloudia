@@ -23,6 +23,7 @@ Optional `.env.local` values:
 VITE_CONTACT_API_BASE=https://your-contact-worker.example.com
 VITE_CONTACT_CHAT_MOCK=1
 GOOGLE_CALENDAR_ICAL_URL=your_google_calendar_ical_url
+VITE_GA4_ID=G-XXXXXXXXXX
 ```
 
 Leave `VITE_CONTACT_API_BASE` empty when Cloudia is mounted on the same origin as corsweb. Do not add Gemini, Vertex, access-token, or service-account secrets to Vite variables; every `VITE_*` value is public browser configuration.
@@ -46,6 +47,10 @@ Provider failures use a generic localized message and a retry button. Do not lin
 - Name, email, and company are collected in the final handoff step and sent to `/api/contact/submit`.
 - Submit PII must not be copied into chat requests, model prompts, console output, or browser diagnostics.
 - The Worker owns provider authentication, validation, classification, persistence, and email delivery.
+- Analytics (`services/analytics.ts`, README "Analytics (GA4)") sends only the two event names, the intent key and
+  allow-listed utm values. Never add typed text, names, email, session ids, receipt numbers or raw URL query
+  parameters to an event or to `page_location`. Count a completion only through `submitContactInquiry`, after the
+  Worker answered with a receipt.
 
 ### Modes and Intents
 

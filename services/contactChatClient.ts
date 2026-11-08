@@ -158,7 +158,7 @@ export interface SubmitResult {
   receiptId?: string;
 }
 
-const RECEIPT_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
+export const RECEIPT_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
 
 function parseReceiptId(body: unknown): string | undefined {
   if (!isRecord(body) || typeof body.receiptId !== 'string') return undefined;

@@ -3,6 +3,10 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { startAnalytics } from './services/analytics';
+
+// Once per page view, outside React, so StrictMode's double invocation cannot repeat it.
+startAnalytics();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
