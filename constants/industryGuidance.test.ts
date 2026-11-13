@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { INDUSTRY_ENTRY_SOURCES, type IndustryEntrySource } from './entrySources';
 import {
-  INDUSTRY_COPY_STATUS,
   historyHasIndustryReception,
   industryContextLine,
   industryGuidance,
@@ -46,7 +45,6 @@ const EXPECTED: Record<IndustryEntrySource, { ja: string; en: string; forbidden:
 describe('industry opening', () => {
   it.each(INDUSTRY_ENTRY_SOURCES)('gives %s one question and no claim', (source) => {
     const guidance = industryGuidance(source);
-    expect(guidance.copyStatus).toBe(INDUSTRY_COPY_STATUS);
     for (const locale of ['ja', 'en'] as const) {
       const line = industryContextLine(source, locale);
       expect(line).toContain(EXPECTED[source][locale]);

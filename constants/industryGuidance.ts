@@ -18,15 +18,20 @@ import {
 } from './entrySources';
 
 /**
- * Copy status shared with corsweb's contact Worker. The reception contract
- * fixture holds the same value, so a change on one side fails a test.
+ * Copy status per language, shared with corsweb's contact Worker. The
+ * reception contract fixture holds the same values, so a change on one side
+ * fails a test.
+ * - ja: checked sentence by sentence against the published industry page text.
+ * - en: a translation aligned with ja, not checked yet.
+ * The status is not sent to a model; it is for people and tests.
  */
-export const INDUSTRY_COPY_STATUS = 'aligned-2026-11-13' as const;
+export const INDUSTRY_COPY_STATUS = {
+  ja: 'page-body-checked-2026-11-13',
+  en: 'provisional-2026-11-08',
+} as const satisfies Record<Locale, string>;
 
 export interface IndustryGuidance {
   source: IndustryEntrySource;
-  /** The wording follows the published industry pages (see INDUSTRY_COPY_STATUS). */
-  copyStatus: typeof INDUSTRY_COPY_STATUS;
   label: Record<Locale, string>;
   opening: Record<Locale, string>;
   question: Record<Locale, string>;
@@ -35,7 +40,6 @@ export interface IndustryGuidance {
 const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
   'industry-medical': {
     source: 'industry-medical',
-    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '医療', en: 'Healthcare' },
     opening: {
       ja: '医療のページから開いています。最初は業務の概要だけで構いません。患者さんの実データやカルテ、認証情報は書かないでください。ここでは診断も、結果の保証もしません。',
@@ -48,7 +52,6 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
   },
   'industry-shigyo': {
     source: 'industry-shigyo',
-    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '士業', en: 'Professional services' },
     opening: {
       ja: '士業のページから開いています。最初は業務の概要だけで構いません。顧問先・依頼者の実データや認証情報は書かないでください。法律や税務の結論は出しません。',
@@ -61,7 +64,6 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
   },
   'industry-construction': {
     source: 'industry-construction',
-    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '建設', en: 'Construction' },
     opening: {
       ja: '建設のページから開いています。最初は業務の概要だけで構いません。現場の実データや機密資料は書かないでください。工期や安全の適合は、ここでは断定しません。',
@@ -74,7 +76,6 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
   },
   'industry-manufacturing': {
     source: 'industry-manufacturing',
-    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '製造', en: 'Manufacturing' },
     opening: {
       ja: '製造のページから開いています。最初は業務の概要だけで構いません。現場の実データや機密資料は書かないでください。品質や歩留まりの改善は、ここでは断定しません。',
@@ -87,7 +88,6 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
   },
   'industry-education': {
     source: 'industry-education',
-    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '教育', en: 'Education' },
     opening: {
       ja: '教育のページから開いています。最初は業務の概要だけで構いません。学生・生徒の実データ、機密資料、認証情報は書かないでください。学習効果は、ここでは断定しません。',
@@ -250,35 +250,35 @@ export function industryModelPolicy(source: IndustryEntrySource): string {
   switch (source) {
     case 'industry-medical':
       return [
-        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        `Industry context (trusted enum ${source}): ${guidance.label.en}.`,
         'Ask only what the visitor wants to do first (for example referral letters or nursing summaries).',
         'Do not request patient records, symptoms, diagnoses, or personal names.',
         'Do not make a diagnosis, claim a certification, or promise an outcome.',
       ].join(' ');
     case 'industry-shigyo':
       return [
-        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        `Industry context (trusted enum ${source}): ${guidance.label.en}.`,
         'Ask only what the visitor wants to do first (for example answers for client companies or case documents).',
         'Do not request a client name or the contents of a matter.',
         'Do not give a legal or tax conclusion or promise an outcome.',
       ].join(' ');
     case 'industry-construction':
       return [
-        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        `Industry context (trusted enum ${source}): ${guidance.label.en}.`,
         'Ask only what the visitor wants to do first (for example transcribing site reports or drafting documents).',
         'Do not request a client name or a contract.',
         'Do not confirm a schedule, a safety approval, or promise an outcome.',
       ].join(' ');
     case 'industry-manufacturing':
       return [
-        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        `Industry context (trusted enum ${source}): ${guidance.label.en}.`,
         'Ask only what the visitor wants to do first (for example daily reports or clues for the next person on a task).',
         'Do not request drawings, a customer specification, or personal names.',
         'Do not promise a quality or yield result.',
       ].join(' ');
     case 'industry-education':
       return [
-        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        `Industry context (trusted enum ${source}): ${guidance.label.en}.`,
         'Ask only what the visitor wants to do first (for example searching school documents or transcribing into the academic system).',
         'Do not request a student name or grades.',
         'Do not promise a learning outcome.',

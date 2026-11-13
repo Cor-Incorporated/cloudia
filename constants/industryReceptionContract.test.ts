@@ -13,7 +13,7 @@ import { INDUSTRY_COPY_STATUS, industryReceptionMarker } from './industryGuidanc
  */
 interface ReceptionContract {
   contract: string;
-  copyStatus: string;
+  copyStatus: Record<string, string>;
   sources: string[];
   genericSources: string[];
   localeFallback: Record<string, string>;
@@ -30,7 +30,7 @@ describe('industry reception contract fixture', () => {
   });
 
   it('shares the copy status with this client', () => {
-    expect(contract.copyStatus).toBe(INDUSTRY_COPY_STATUS);
+    expect(contract.copyStatus).toEqual(INDUSTRY_COPY_STATUS);
   });
 
   it('lists the same five industry sources and the same generic tags as this client', () => {
