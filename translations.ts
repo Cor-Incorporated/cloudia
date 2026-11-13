@@ -73,6 +73,7 @@ export const translations = {
     intentSelected: "選択中の目的: {{label}}",
     industryContextLabel: "業種の入口: {{label}}",
     skipChatHandoff: "チャットを使わずに連絡先を送る",
+    // 資料の受け取りの入口ができたら、この注（en も）を直す。入口ができた後も「まだ受け付けていません」が残らないように。
     unavailableExtensions: "資料の送付と商談の日時予約は、この画面ではまだ受け付けていません。ご相談は、このチャットか、連絡先の送信で受け付けます。",
     knowledgeUpdated: "会社の知識が更新されました。次回の回答からこの情報を使用します。",
     thinking: "確認しています…",
