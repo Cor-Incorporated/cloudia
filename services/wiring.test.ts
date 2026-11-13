@@ -45,4 +45,16 @@ describe('App.tsx', () => {
   it('never calls postContactSubmit directly, which would skip the counting', () => {
     expect(source).not.toMatch(/postContactSubmit/);
   });
+
+  it('shows the panel under the chat only for an industry entry (other entries keep the current screen)', () => {
+    expect(source).toMatch(/showIndustryEntryPanel\(\{ \.\.\.pathInput, industryEntry: Boolean\(industryName\) \}\)/);
+    expect(source).toMatch(/\{industryEntryPanelVisible && \(\n\s+<div className="shrink-0 space-y-2 border-t/);
+    expect(source).not.toMatch(/\{!showHandoff && !submitted && !faqResolved && appMode === 'intake' && \(/);
+  });
+
+  it('offers the existing contact form without refusing a sales classification', () => {
+    expect(source).toMatch(/showDirectHandoff/);
+    expect(source).toMatch(/showReadyHandoff/);
+    expect(source).not.toMatch(/classification\s*===\s*['"]sales['"]/);
+  });
 });

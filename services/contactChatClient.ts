@@ -4,7 +4,9 @@
  */
 import type { AppMode, ContactIntent } from '../types';
 import type { Locale } from '../translations';
+import { parseEntrySourceValue, type EntrySource } from '../constants/entrySources';
 import { parseContactIntent } from '../constants/intents';
+import { summaryWithEntrySource, withIndustryContext } from '../constants/industryGuidance';
 
 export type ChatRole = 'user' | 'assistant';
 
@@ -41,12 +43,28 @@ export interface ChatResult {
   structuredLead?: StructuredLead;
 }
 
+/** Sent when the page has no allow-listed entry source. Not taken from the query. */
+export const CLIENT_SOURCE = 'cloudia';
+
+export type ChatTrafficSource = EntrySource | typeof CLIENT_SOURCE;
+
+/**
+ * The contact API has one `source` field. An allow-listed entry source uses it.
+ * Any other value, including a query that tried to add instructions, becomes
+ * the fixed client tag and is not echoed.
+ */
+export function resolveChatTrafficSource(raw: unknown): ChatTrafficSource {
+  return parseEntrySourceValue(raw) ?? CLIENT_SOURCE;
+}
+
 export interface ContactChatContext {
   mode: AppMode;
   locale: Locale;
   intent: ContactIntent | null;
   sessionId?: string | null;
-  source?: 'cloudia';
+  /** Prefer `entrySource`. `source` remains for callers that already pass the client tag. */
+  source?: ChatTrafficSource;
+  entrySource?: unknown;
   /**
    * Optional Cloudflare Turnstile token. Chat does not require one (ADR-0006);
    * the contact-chat Worker verifies Turnstile on /submit. The local intake
@@ -73,7 +91,7 @@ interface NormalizedChatContext {
   locale: Locale;
   intent: ContactIntent | null;
   sessionId: string;
-  source: 'cloudia';
+  source: ChatTrafficSource;
   turnstileToken?: string;
 }
 
@@ -91,7 +109,7 @@ function normalizeChatContext(context: ContactChatContext): NormalizedChatContex
     locale: context.locale === 'ja' ? 'ja' : 'en',
     intent: parseContactIntent(context.intent),
     sessionId: typeof context.sessionId === 'string' && context.sessionId.trim() ? context.sessionId.trim() : '',
-    source: 'cloudia',
+    source: resolveChatTrafficSource(context.entrySource ?? context.source),
     ...(turnstileToken ? { turnstileToken } : {}),
   };
 }
@@ -146,6 +164,7 @@ export interface SubmitPayload {
   classification?: Classification | '';
   intent?: ContactIntent | null;
   source?: string;
+  entrySource?: unknown;
   turnstileToken?: string;
   website?: string; // honeypot — always ''
 }
@@ -202,6 +221,15 @@ export function toApiMessages(
     .slice(-20);
 }
 
+/** History plus the industry line, still inside the Worker's 20-message cap. */
+export function toApiMessagesWithIndustry(
+  history: { sender: 'user' | 'ai'; text: string }[],
+  entrySource: unknown,
+  locale: Locale,
+): ContactChatMessage[] {
+  return withIndustryContext(toApiMessages(history), entrySource, locale);
+}
+
 export function buildConversationSummary(
   history: { sender: 'user' | 'ai'; text: string }[],
   intent?: ContactIntent | null,
@@ -217,6 +245,7 @@ export async function postContactChat(
   options: ContactChatRequestOptions = {},
 ): Promise<ChatResult> {
   const normalizedContext = normalizeChatContext(context);
+  const outboundMessages = withIndustryContext(messages, normalizedContext.source, normalizedContext.locale);
   if (isContactChatMock()) {
     const last = messages.filter((m) => m.role === 'user').pop()?.content ?? '';
     return {
@@ -233,7 +262,7 @@ export async function postContactChat(
     headers: { 'content-type': 'application/json; charset=utf-8' },
     signal: options.signal,
     body: JSON.stringify({
-      messages,
+      messages: outboundMessages,
       mode: normalizedContext.mode,
       locale: normalizedContext.locale,
       intent: normalizedContext.intent,
@@ -257,8 +286,9 @@ export async function postContactChat(
 
 /**
  * Starts an intake conversation after the visitor chooses an intent.
- * The selected intent is carried as context; no synthetic user message is
- * added to the visible conversation history.
+ * The selected intent and the validated entry source are the start context.
+ * The industry question is not copied into this request: the Worker writes
+ * the first reply, and a second copy here would sit beside that reply.
  */
 export async function postContactChatStart(
   messages: ContactChatMessage[],
@@ -266,6 +296,7 @@ export async function postContactChatStart(
   options: ContactChatRequestOptions = {},
 ): Promise<ChatResult> {
   const normalizedContext = normalizeChatContext(context);
+  const outboundMessages = messages.slice(-20);
   if (isContactChatMock()) {
     return {
       reply: normalizedContext.locale === 'ja'
@@ -281,7 +312,7 @@ export async function postContactChatStart(
     headers: { 'content-type': 'application/json; charset=utf-8' },
     signal: options.signal,
     body: JSON.stringify({
-      messages,
+      messages: outboundMessages,
       mode: normalizedContext.mode,
       locale: normalizedContext.locale,
       intent: normalizedContext.intent,
@@ -320,13 +351,17 @@ export async function postContactSubmit(
     company: payload.company ?? '',
     message: intentTag + (payload.message || ''),
     // Worker側で検証済み要約として扱う。生トランスクリプトはここへ渡さない。
-    summaryText: payload.summaryText ?? payload.conversationSummary ?? '',
+    // entry_source は許可した enum だけを足す。クエリの生値は足さない。
+    summaryText: summaryWithEntrySource(
+      payload.summaryText ?? payload.conversationSummary ?? '',
+      payload.entrySource ?? payload.source,
+    ),
     ...(payload.structuredLead && Object.keys(payload.structuredLead).length > 0
       ? { structuredLead: payload.structuredLead }
       : {}),
     classification: payload.classification ?? '',
     intent: payload.intent ?? undefined,
-    source: payload.source ?? 'cloudia',
+    source: resolveChatTrafficSource(payload.entrySource ?? payload.source),
     turnstileToken: payload.turnstileToken,
     website: payload.website ?? '',
   };
