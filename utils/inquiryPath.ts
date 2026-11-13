@@ -36,3 +36,16 @@ export function showDirectHandoff(input: InquiryPathInput): boolean {
   if (input.submitted || input.showHandoff || input.readyForContact || input.faqResolved) return false;
   return !handoffBlockedByClassification(input.classification);
 }
+
+/**
+ * The panel under the chat (the industry notice, the note that materials and
+ * booking are not available here, and the "send contact details without
+ * chatting" button) is for visitors who came from an industry page only.
+ * Other entries keep the current screen without this panel.
+ */
+export function showIndustryEntryPanel(
+  input: Pick<InquiryPathInput, 'appMode' | 'submitted' | 'showHandoff' | 'faqResolved'> & { industryEntry: boolean },
+): boolean {
+  if (!input.industryEntry || input.appMode !== 'intake') return false;
+  return !input.showHandoff && !input.submitted && !input.faqResolved;
+}

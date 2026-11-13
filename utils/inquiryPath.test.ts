@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { showDirectHandoff, showReadyHandoff, type InquiryPathInput } from './inquiryPath';
+import { showDirectHandoff, showIndustryEntryPanel, showReadyHandoff, type InquiryPathInput } from './inquiryPath';
 
 function path(overrides: Partial<InquiryPathInput> = {}): InquiryPathInput {
   return {
@@ -39,5 +39,21 @@ describe('inquiry path', () => {
 
   it('does not offer the direct form in the ambassador conversation', () => {
     expect(showDirectHandoff(path({ appMode: 'ambassador' }))).toBe(false);
+  });
+});
+
+describe('showIndustryEntryPanel', () => {
+  const base = { appMode: 'intake' as const, submitted: false, showHandoff: false, faqResolved: false };
+
+  it('shows the panel only for an industry entry in intake mode', () => {
+    expect(showIndustryEntryPanel({ ...base, industryEntry: true })).toBe(true);
+    expect(showIndustryEntryPanel({ ...base, industryEntry: false })).toBe(false);
+    expect(showIndustryEntryPanel({ ...base, appMode: 'ambassador', industryEntry: true })).toBe(false);
+  });
+
+  it('hides the panel once the form is open, the inquiry is sent, or the FAQ answered it', () => {
+    expect(showIndustryEntryPanel({ ...base, industryEntry: true, showHandoff: true })).toBe(false);
+    expect(showIndustryEntryPanel({ ...base, industryEntry: true, submitted: true })).toBe(false);
+    expect(showIndustryEntryPanel({ ...base, industryEntry: true, faqResolved: true })).toBe(false);
   });
 });

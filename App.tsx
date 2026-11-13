@@ -15,7 +15,7 @@ import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget } fr
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import { parseEntrySourceFromSearch } from './constants/entrySources';
 import { industryContextLine, industryLabel, industryNotice, industryOpening } from './constants/industryGuidance';
-import { showDirectHandoff, showReadyHandoff } from './utils/inquiryPath';
+import { showDirectHandoff, showIndustryEntryPanel, showReadyHandoff } from './utils/inquiryPath';
 import {
   isContactChatMock,
   postContactChat,
@@ -497,6 +497,7 @@ const App: React.FC = () => {
   };
   const readyHandoffVisible = showReadyHandoff(pathInput);
   const directHandoffVisible = showDirectHandoff(pathInput);
+  const industryEntryPanelVisible = showIndustryEntryPanel({ ...pathInput, industryEntry: Boolean(industryName) });
   const notice = industryNotice({
     rawSource: entrySource,
     locale,
@@ -697,7 +698,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {!showHandoff && !submitted && !faqResolved && appMode === 'intake' && (
+          {industryEntryPanelVisible && (
             <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-4 py-3">
               {notice === 'boundary' && industryLead && (
                 <p className="max-w-2xl text-sm leading-relaxed text-slate-800" role="note">{industryLead}</p>
