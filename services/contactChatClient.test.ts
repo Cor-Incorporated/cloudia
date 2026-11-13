@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { INDUSTRY_ENTRY_SOURCES } from '../constants/entrySources';
 import { industryContextLine } from '../constants/industryGuidance';
 import {
   ContactChatUnavailableError,
@@ -484,5 +485,26 @@ describe('contactChatClient', () => {
 
       expect(result.receiptId).toBeUndefined();
     }
+  });
+});
+
+describe.each(INDUSTRY_ENTRY_SOURCES)('industry entry %s reaches every Worker call', (entrySource) => {
+  it('sends the same source on start, chat, and submit', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      reply: 'ok',
+      classification: 'genuine',
+      readyForContact: false,
+      ok: true,
+      receiptId: 'COR-20261113-1A2B3C4D',
+    }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    vi.stubGlobal('fetch', fetchMock);
+    const context = { mode: 'intake' as const, locale: 'ja' as const, intent: 'contract-dev' as const, entrySource };
+
+    await postContactChatStart([{ role: 'assistant', content: 'ようこそ。' }], context);
+    await postContactChat([{ role: 'assistant', content: 'ようこそ。' }, { role: 'user', content: '相談です。' }], context);
+    await postContactSubmit({ name: 'Test User', email: 'test@example.com', message: '相談内容', entrySource });
+
+    const sources = fetchMock.mock.calls.map((call) => (JSON.parse(String(call[1].body)) as { source: string }).source);
+    expect(sources).toEqual([entrySource, entrySource, entrySource]);
   });
 });
