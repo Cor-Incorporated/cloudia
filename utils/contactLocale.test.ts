@@ -93,3 +93,10 @@ describe('contact locales', () => {
     expect(translations[fallback].aiError).toContain('try again');
   });
 });
+
+describe('resolveUiLocale with a stored value', () => {
+  it.each(['zh', 'ko', 'es', 'en-US', 'fr', ''])('ignores a stored %j that is not a language of this UI', (stored) => {
+    expect(resolveUiLocale({ query: null, stored, browserLanguage: null })).toBe('en');
+    expect(resolveUiLocale({ query: null, stored, browserLanguage: 'ja-JP' })).toBe('ja');
+  });
+});

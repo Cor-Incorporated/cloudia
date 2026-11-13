@@ -1,10 +1,12 @@
 /**
- * Provisional industry copy for the contact chat.
+ * Industry copy for the contact chat.
  *
- * The owner's final wording (from a separate drafting session) has not
- * arrived. These sentences are a stand-in so the five industry pages can open
- * a relevant conversation. They are not a diagnosis, a legal or tax
- * conclusion, a certification, or a promised result.
+ * The opening and the first question are the same sentences as corsweb's
+ * contact Worker returns (the reception contract fixture holds the full text).
+ * The ja copy was checked against the published industry page text; the en
+ * copy is a translation that has not been checked yet (INDUSTRY_COPY_STATUS).
+ * They are not a diagnosis, a legal or tax conclusion, a certification, or a
+ * promised result.
  *
  * The query string is not copied in. Callers pass a value that has already
  * been checked against the industry enum, and these functions check again.
@@ -66,8 +68,8 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
     source: 'industry-construction',
     label: { ja: '建設', en: 'Construction' },
     opening: {
-      ja: '建設のページから開いています。最初は業務の概要だけで構いません。現場の実データや機密資料は書かないでください。工期や安全の適合は、ここでは断定しません。',
-      en: 'You opened this from the construction page. An outline of the work is enough to start. Do not write real site data or confidential documents. This chat does not confirm a schedule or a safety approval.',
+      ja: '建設のページから開いています。最初は業務の概要だけで構いません。現場の実データや機密資料を書く必要はありません。工期や安全の適合は、ここでは断定しません。',
+      en: 'You opened this from the construction page. An outline of the work is enough to start. There is no need to write real site data or confidential documents. This chat does not confirm a schedule or a safety approval.',
     },
     question: {
       ja: '現場から届く報告の転記や書類の下書きなど、まず、どんなことをしたいとお考えですか。',
@@ -78,8 +80,8 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
     source: 'industry-manufacturing',
     label: { ja: '製造', en: 'Manufacturing' },
     opening: {
-      ja: '製造のページから開いています。最初は業務の概要だけで構いません。現場の実データや機密資料は書かないでください。品質や歩留まりの改善は、ここでは断定しません。',
-      en: 'You opened this from the manufacturing page. An outline of the work is enough to start. Do not write real shop-floor data or confidential documents. This chat does not promise a quality or yield result.',
+      ja: '製造のページから開いています。最初は業務の概要だけで構いません。現場の実データや機密資料を書く必要はありません。品質や歩留まりの改善は、ここでは断定しません。',
+      en: 'You opened this from the manufacturing page. An outline of the work is enough to start. There is no need to write real shop-floor data or confidential documents. This chat does not promise a quality or yield result.',
     },
     question: {
       ja: '日報や、次の担当者へ残したい作業の手がかりなど、まず、どんなことをしたいとお考えですか。',
