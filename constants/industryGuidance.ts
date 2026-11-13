@@ -123,10 +123,11 @@ export function industryOpening(raw: unknown, locale: Locale | string): string |
 }
 
 /**
- * First sentence of the opening. corsweb's start reply (PR 510 head
- * 291af3fa, contract docs/industry-chat-worker-contract-2026-11-08.md)
- * reuses this sentence and then asks one intent-specific question, sometimes
- * without a newline. Matching the whole Cloudia line would miss that reply.
+ * First sentence of the opening. corsweb's start reply (contract
+ * docs/industry-chat-worker-contract-2026-11-08.md, fixture
+ * constants/fixtures/industry-reception-contract.v1.json) starts with this
+ * sentence and then asks one intent-specific question. An earlier reply had no
+ * newline before the question. Matching the whole Cloudia line would miss it.
  */
 export function industryReceptionMarker(raw: unknown, locale: Locale | string): string | null {
   const opening = industryOpening(raw, locale);

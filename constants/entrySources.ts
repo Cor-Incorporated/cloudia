@@ -1,8 +1,9 @@
 /**
  * Entry sources the contact chat may keep.
  *
- * Contract: corsweb docs/industry-chat-worker-contract-2026-11-08.md
- * at 291af3fa0b3b0c79309b374c8550ed128c2d521f (PR 510, unmerged).
+ * Contract: corsweb docs/industry-chat-worker-contract-2026-11-08.md and the
+ * reception contract fixture constants/fixtures/industry-reception-contract.v1.json,
+ * which corsweb's contact Worker checks with the same bytes.
  * The Worker trims and then exact-matches. This client does not trim a
  * different string into a token. Unknown values, a repeated `source`, and
  * anything that looks like an address or a phone number are dropped and never
