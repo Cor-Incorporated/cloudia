@@ -17,10 +17,16 @@ import {
   type IndustryEntrySource,
 } from './entrySources';
 
+/**
+ * Copy status shared with corsweb's contact Worker. The reception contract
+ * fixture holds the same value, so a change on one side fails a test.
+ */
+export const INDUSTRY_COPY_STATUS = 'aligned-2026-11-13' as const;
+
 export interface IndustryGuidance {
   source: IndustryEntrySource;
-  /** Marks this wording as a stand-in for the unreleased final copy. */
-  provisional: true;
+  /** The wording follows the published industry pages (see INDUSTRY_COPY_STATUS). */
+  copyStatus: typeof INDUSTRY_COPY_STATUS;
   label: Record<Locale, string>;
   opening: Record<Locale, string>;
   question: Record<Locale, string>;
@@ -29,67 +35,67 @@ export interface IndustryGuidance {
 const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
   'industry-medical': {
     source: 'industry-medical',
-    provisional: true,
+    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '医療', en: 'Healthcare' },
     opening: {
-      ja: '医療のページから開いています。患者さんの記録、症状、個人名は書かないでください。ここでは診断も、結果の保証もしません。',
-      en: 'You opened this from the healthcare page. Do not write patient records, symptoms, or anyone\'s name. This chat does not make a diagnosis or promise a result.',
+      ja: '医療のページから開いています。最初は業務の概要だけで構いません。患者さんの実データやカルテ、認証情報は書かないでください。ここでは診断も、結果の保証もしません。',
+      en: 'You opened this from the healthcare page. An outline of the work is enough to start. Do not write real patient data, medical records, or login credentials. This chat does not make a diagnosis or promise a result.',
     },
     question: {
-      ja: '受付、記録の下書き、院内の調べもののどれに近いご相談ですか。',
-      en: 'Is this closer to reception, drafting notes, or an internal lookup?',
+      ja: '紹介状の下書きや看護サマリーの整理など、まず、どんなことをしたいとお考えですか。',
+      en: 'To start, what would you like to do, for example drafting referral letters or organizing nursing summaries?',
     },
   },
   'industry-shigyo': {
     source: 'industry-shigyo',
-    provisional: true,
+    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '士業', en: 'Professional services' },
     opening: {
-      ja: '士業のページから開いています。依頼者名や案件の中身は書かないでください。法律や税務の結論は出しません。',
-      en: 'You opened this from the professional-services page. Do not write a client\'s name or the contents of a matter. This chat does not give a legal or tax conclusion.',
+      ja: '士業のページから開いています。最初は業務の概要だけで構いません。顧問先・依頼者の実データや認証情報は書かないでください。法律や税務の結論は出しません。',
+      en: 'You opened this from the professional-services page. An outline of the work is enough to start. Do not write real data about your clients or login credentials. This chat does not give a legal or tax conclusion.',
     },
     question: {
-      ja: 'どの事務所の、どの業務についてのご相談ですか。',
-      en: 'Which kind of office, and which kind of work, is this about?',
+      ja: '顧問先への回答案づくりや案件資料の整理など、まず、どんなことをしたいとお考えですか。',
+      en: 'To start, what would you like to do, for example drafting answers for client companies or organizing case documents?',
     },
   },
   'industry-construction': {
     source: 'industry-construction',
-    provisional: true,
+    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '建設', en: 'Construction' },
     opening: {
-      ja: '建設のページから開いています。施主名や契約書は書かないでください。工期や安全の適合は、ここでは断定しません。',
-      en: 'You opened this from the construction page. Do not write a client\'s name or paste a contract. This chat does not confirm a schedule or a safety approval.',
+      ja: '建設のページから開いています。最初は業務の概要だけで構いません。現場の実データや機密資料は書かないでください。工期や安全の適合は、ここでは断定しません。',
+      en: 'You opened this from the construction page. An outline of the work is enough to start. Do not write real site data or confidential documents. This chat does not confirm a schedule or a safety approval.',
     },
     question: {
-      ja: '現場の記録、見積りの整理、社内の調べもののどれに近いご相談ですか。',
-      en: 'Is this closer to site notes, organizing an estimate, or an internal lookup?',
+      ja: '現場から届く報告の転記や書類の下書きなど、まず、どんなことをしたいとお考えですか。',
+      en: 'To start, what would you like to do, for example transcribing reports from the site or drafting documents?',
     },
   },
   'industry-manufacturing': {
     source: 'industry-manufacturing',
-    provisional: true,
+    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '製造', en: 'Manufacturing' },
     opening: {
-      ja: '製造のページから開いています。図面、顧客の仕様、個人名は書かないでください。品質や歩留まりの改善は、ここでは断定しません。',
-      en: 'You opened this from the manufacturing page. Do not paste drawings, a customer\'s specifications, or personal names. This chat does not promise a quality or yield result.',
+      ja: '製造のページから開いています。最初は業務の概要だけで構いません。現場の実データや機密資料は書かないでください。品質や歩留まりの改善は、ここでは断定しません。',
+      en: 'You opened this from the manufacturing page. An outline of the work is enough to start. Do not write real shop-floor data or confidential documents. This chat does not promise a quality or yield result.',
     },
     question: {
-      ja: '現場のメモ、品質の記録、社内の調べもののどれに近いご相談ですか。',
-      en: 'Is this closer to shop-floor notes, quality records, or an internal lookup?',
+      ja: '日報や、次の担当者へ残したい作業の手がかりなど、まず、どんなことをしたいとお考えですか。',
+      en: 'To start, what would you like to do, for example daily reports or the clues you want to leave for the next person on a task?',
     },
   },
   'industry-education': {
     source: 'industry-education',
-    provisional: true,
+    copyStatus: INDUSTRY_COPY_STATUS,
     label: { ja: '教育', en: 'Education' },
     opening: {
-      ja: '教育のページから開いています。生徒の名前や成績は書かないでください。学習効果は、ここでは断定しません。',
-      en: 'You opened this from the education page. Do not write a student\'s name or grades. This chat does not promise a learning outcome.',
+      ja: '教育のページから開いています。最初は業務の概要だけで構いません。学生・生徒の実データ、機密資料、認証情報は書かないでください。学習効果は、ここでは断定しません。',
+      en: 'You opened this from the education page. An outline of the work is enough to start. Do not write real student data, confidential documents, or login credentials. This chat does not promise a learning outcome.',
     },
     question: {
-      ja: '職員の事務、教材の下書き、問い合わせ対応のどれに近いご相談ですか。',
-      en: 'Is this closer to staff administration, drafting teaching material, or handling inquiries?',
+      ja: '学内の資料の検索や教務システムへの転記など、まず、どんなことをしたいとお考えですか。',
+      en: 'To start, what would you like to do, for example searching school documents or transcribing into the academic system?',
     },
   },
 };
@@ -244,36 +250,36 @@ export function industryModelPolicy(source: IndustryEntrySource): string {
   switch (source) {
     case 'industry-medical':
       return [
-        `Industry context (trusted enum ${source}, provisional copy): ${guidance.label.en}.`,
-        'Ask only which kind of work this is (reception, drafting notes, or an internal lookup).',
+        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        'Ask only what the visitor wants to do first (for example referral letters or nursing summaries).',
         'Do not request patient records, symptoms, diagnoses, or personal names.',
         'Do not make a diagnosis, claim a certification, or promise an outcome.',
       ].join(' ');
     case 'industry-shigyo':
       return [
-        `Industry context (trusted enum ${source}, provisional copy): ${guidance.label.en}.`,
-        'Ask only the kind of office and the kind of work.',
+        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        'Ask only what the visitor wants to do first (for example answers for client companies or case documents).',
         'Do not request a client name or the contents of a matter.',
         'Do not give a legal or tax conclusion or promise an outcome.',
       ].join(' ');
     case 'industry-construction':
       return [
-        `Industry context (trusted enum ${source}, provisional copy): ${guidance.label.en}.`,
-        'Ask only whether this is closer to site notes, organizing an estimate, or an internal lookup.',
+        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        'Ask only what the visitor wants to do first (for example transcribing site reports or drafting documents).',
         'Do not request a client name or a contract.',
         'Do not confirm a schedule, a safety approval, or promise an outcome.',
       ].join(' ');
     case 'industry-manufacturing':
       return [
-        `Industry context (trusted enum ${source}, provisional copy): ${guidance.label.en}.`,
-        'Ask only whether this is closer to shop-floor notes, quality records, or an internal lookup.',
+        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        'Ask only what the visitor wants to do first (for example daily reports or clues for the next person on a task).',
         'Do not request drawings, a customer specification, or personal names.',
         'Do not promise a quality or yield result.',
       ].join(' ');
     case 'industry-education':
       return [
-        `Industry context (trusted enum ${source}, provisional copy): ${guidance.label.en}.`,
-        'Ask only whether this is closer to staff administration, drafting teaching material, or handling inquiries.',
+        `Industry context (trusted enum ${source}, copy ${INDUSTRY_COPY_STATUS}): ${guidance.label.en}.`,
+        'Ask only what the visitor wants to do first (for example searching school documents or transcribing into the academic system).',
         'Do not request a student name or grades.',
         'Do not promise a learning outcome.',
       ].join(' ');

@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { contactCopyLocale } from '../utils/contactLocale';
 import { INDUSTRY_ENTRY_SOURCES, OTHER_ENTRY_SOURCES } from './entrySources';
-import { industryReceptionMarker } from './industryGuidance';
+import { INDUSTRY_COPY_STATUS, industryReceptionMarker } from './industryGuidance';
 
 /**
  * The fixture is the same file that corsweb's contact Worker checks
@@ -27,6 +27,10 @@ const contract = JSON.parse(
 describe('industry reception contract fixture', () => {
   it('names the contract this client follows', () => {
     expect(contract.contract).toBe('industry-reception-v1');
+  });
+
+  it('shares the copy status with this client', () => {
+    expect(contract.copyStatus).toBe(INDUSTRY_COPY_STATUS);
   });
 
   it('lists the same five industry sources and the same generic tags as this client', () => {
