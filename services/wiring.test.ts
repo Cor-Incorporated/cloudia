@@ -45,4 +45,10 @@ describe('App.tsx', () => {
   it('never calls postContactSubmit directly, which would skip the counting', () => {
     expect(source).not.toMatch(/postContactSubmit/);
   });
+
+  it('offers the existing contact form without refusing a sales classification', () => {
+    expect(source).toMatch(/showDirectHandoff/);
+    expect(source).toMatch(/showReadyHandoff/);
+    expect(source).not.toMatch(/classification\s*===\s*['"]sales['"]/);
+  });
 });

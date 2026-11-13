@@ -6,9 +6,10 @@
  * - contact_chat_submit_success  after the Worker has accepted an inquiry
  *
  * Privacy boundary: the only values that leave the page are the event names, the
- * intent key and allow-listed utm values (see ALLOWED_UTM). Typed text, names,
- * e-mail addresses, conversation, session ids, receipt numbers and arbitrary URL
- * query parameters are never sent. gtag.js builds page_location, form_destination and
+ * intent key, an allow-listed entry source (see ENTRY_SOURCES) and allow-listed
+ * utm values (see ALLOWED_UTM). Typed text, names, e-mail addresses, conversation,
+ * session ids, receipt numbers and arbitrary URL query parameters are never sent.
+ * gtag.js builds page_location, form_destination and
  * page_referrer from the real URL and document.referrer, so start() first rewrites the
  * visible URL (history.replaceState: allow-listed query, no hash) and document.referrer
  * (origin and path only), then loads gtag.js. If either rewrite fails, nothing is loaded.
@@ -20,6 +21,7 @@
  *
  * The measurement ID is a build-time value (VITE_GA4_ID). Unset means off.
  */
+import { parseEntrySourceFromSearch, type EntrySource } from '../constants/entrySources';
 import { parseContactIntent } from '../constants/intents';
 import type { ContactIntent } from '../types';
 import { resolveAppMode } from '../utils/appMode';
@@ -48,6 +50,8 @@ const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign'] as const;
 
 export interface AnalyticsParams {
   intent?: ContactIntent;
+  /** GA4 name. The page URL keeps the same value under `source`. */
+  entry_source?: EntrySource;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -95,12 +99,17 @@ export function normalizeGa4Id(raw: string | null | undefined): string {
 export function allowedParams(search: string): AnalyticsParams {
   const query = new URLSearchParams(search);
   const intent = parseContactIntent(query.get('intent'));
+  const entrySource = parseEntrySourceFromSearch(search);
   const utm = UTM_KEYS.flatMap((key): [string, string][] => {
     const value = (query.get(key) ?? '').trim().toLowerCase();
     const allowed = (ALLOWED_UTM[key] as readonly string[]).find((candidate) => candidate === value);
     return allowed ? [[key, allowed]] : [];
   });
-  return Object.fromEntries([...(intent ? [['intent', intent]] : []), ...utm]) as AnalyticsParams;
+  return Object.fromEntries([
+    ...(intent ? [['intent', intent]] : []),
+    ...(entrySource ? [['entry_source', entrySource]] : []),
+    ...utm,
+  ]) as AnalyticsParams;
 }
 
 /**
@@ -108,9 +117,18 @@ export function allowedParams(search: string): AnalyticsParams {
  * (LanguageContext accepts exactly 'ja' or 'en'). Anything else is dropped.
  */
 export function allowedQuery(search: string): string {
+  const params = allowedParams(search);
   const locale = new URLSearchParams(search).get('locale');
-  const keptLocale: [string, string][] = locale === 'ja' || locale === 'en' ? [['locale', locale]] : [];
-  return new URLSearchParams([...Object.entries(allowedParams(search)), ...keptLocale]).toString();
+  const pairs: [string, string][] = [];
+  if (params.intent) pairs.push(['intent', params.intent]);
+  // The URL key stays `source`. The event parameter is `entry_source`.
+  if (params.entry_source) pairs.push(['source', params.entry_source]);
+  for (const key of UTM_KEYS) {
+    const value = params[key];
+    if (value) pairs.push([key, value]);
+  }
+  if (locale === 'ja' || locale === 'en') pairs.push(['locale', locale]);
+  return new URLSearchParams(pairs).toString();
 }
 
 /** origin + path + allow-listed query. The hash and every other parameter are dropped. */
@@ -193,6 +211,7 @@ function loadGtag(win: AnalyticsWindow, ga4Id: string): (...args: unknown[]) => 
 export function createAnalytics(win: AnalyticsWindow | undefined, rawGa4Id: string | null | undefined): Analytics {
   const ga4Id = normalizeGa4Id(rawGa4Id);
   const reportedReceipts = new Set<string>();
+  let pageParams: AnalyticsParams = {};
 
   const isEnabled = (target: AnalyticsWindow | undefined): target is AnalyticsWindow =>
     target !== undefined &&
@@ -234,7 +253,8 @@ export function createAnalytics(win: AnalyticsWindow | undefined, rawGa4Id: stri
         page_location: pageLocation,
         ...(referrer ? { page_referrer: referrer } : {}),
       });
-      gtag('event', CONTACT_CHAT_VIEW_EVENT, allowedParams(search));
+      pageParams = allowedParams(search);
+      gtag('event', CONTACT_CHAT_VIEW_EVENT, pageParams);
     },
 
     trackSubmitSuccess(receiptId, intent) {
@@ -243,7 +263,11 @@ export function createAnalytics(win: AnalyticsWindow | undefined, rawGa4Id: stri
       // The receipt number is only used here to count an inquiry once. It is not sent.
       reportedReceipts.add(receiptId);
       const safeIntent = parseContactIntent(intent);
-      win.gtag('event', CONTACT_CHAT_SUBMIT_SUCCESS_EVENT, safeIntent ? { intent: safeIntent } : {});
+      const params: AnalyticsParams = {
+        ...(safeIntent ? { intent: safeIntent } : {}),
+        ...(pageParams.entry_source ? { entry_source: pageParams.entry_source } : {}),
+      };
+      win.gtag('event', CONTACT_CHAT_SUBMIT_SUCCESS_EVENT, params);
     },
   };
 }

@@ -13,6 +13,9 @@ import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
 import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget } from './utils/chatView';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
+import { parseEntrySourceFromSearch } from './constants/entrySources';
+import { industryContextLine, industryLabel, industryNotice, industryOpening } from './constants/industryGuidance';
+import { showDirectHandoff, showReadyHandoff } from './utils/inquiryPath';
 import {
   isContactChatMock,
   postContactChat,
@@ -93,6 +96,14 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return null;
     return parseContactIntent(new URLSearchParams(window.location.search).get('intent'));
   });
+  // Read after startAnalytics() has already dropped anything that is not an allow-listed source.
+  const entrySource = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return parseEntrySourceFromSearch(window.location.search);
+  }, []);
+  const industryLine = industryContextLine(entrySource, locale);
+  const industryLead = industryOpening(entrySource, locale);
+  const industryName = industryLabel(entrySource, locale);
   const [sessionId, setSessionId] = useState<string | null>(() => readSessionId(appMode, locale, selectedIntent));
   const idempotencyKeyRef = useRef(uuidv4());
   const initialIntentFromUrlRef = useRef(selectedIntent);
@@ -232,7 +243,7 @@ const App: React.FC = () => {
         locale,
         intent,
         sessionId: requestedSessionId,
-        source: 'cloudia',
+        entrySource,
       }, { signal: controller.signal });
       if (controller.signal.aborted) return;
       if (result.sessionId) {
@@ -266,7 +277,7 @@ const App: React.FC = () => {
     } finally {
       finishRequest(controller);
     }
-  }, [appMode, applyFaqResolutionFromResult, beginRequest, finishRequest, intentStartState, locale, sessionId]);
+  }, [appMode, applyFaqResolutionFromResult, beginRequest, entrySource, finishRequest, intentStartState, locale, sessionId]);
 
   const handleSelectIntent = useCallback((intent: ContactIntent) => {
     const requestedSessionId = selectedIntent === intent ? sessionId : null;
@@ -328,7 +339,7 @@ const App: React.FC = () => {
         locale,
         intent: selectedIntent,
         sessionId,
-        source: 'cloudia',
+        entrySource,
       }, { signal: controller.signal });
       if (controller.signal.aborted) return;
       if (result.sessionId) {
@@ -366,7 +377,7 @@ const App: React.FC = () => {
     } finally {
       finishRequest(controller);
     }
-  }, [applyFaqResolutionFromResult, beginRequest, chatReady, finishRequest, messages, locale, t, appMode, selectedIntent, submitted, sessionId]);
+  }, [applyFaqResolutionFromResult, beginRequest, chatReady, entrySource, finishRequest, messages, locale, t, appMode, selectedIntent, submitted, sessionId]);
 
   const handleRetryChat = useCallback(() => {
     if (lastFailedInput) void handleSendMessage(lastFailedInput, true);
@@ -440,7 +451,7 @@ const App: React.FC = () => {
         structuredLead,
         classification,
         intent: selectedIntent,
-        source: 'cloudia',
+        entrySource,
         website: '',
       }, { signal: controller.signal });
       if (controller.signal.aborted) return;
@@ -472,9 +483,26 @@ const App: React.FC = () => {
       submitLockRef.current = false;
       finishRequest(controller);
     }
-  }, [beginRequest, conversationSummary, finishRequest, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
+  }, [beginRequest, conversationSummary, entrySource, finishRequest, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
 
   const displayEmotion = isLoading ? Emotion.THINKING : currentEmotion;
+  const pathInput = {
+    appMode,
+    submitted,
+    showHandoff,
+    readyForContact,
+    faqResolved,
+    showFaqPrompt,
+    classification,
+  };
+  const readyHandoffVisible = showReadyHandoff(pathInput);
+  const directHandoffVisible = showDirectHandoff(pathInput);
+  const notice = industryNotice({
+    rawSource: entrySource,
+    locale,
+    messages,
+    startSettled: intentStartState === 'started' || apiDegraded,
+  });
   const shellClass = embedMode
     ? 'flex h-dvh min-h-[520px] w-full overflow-hidden bg-slate-100 text-slate-900'
     : 'flex h-dvh min-h-dvh overflow-hidden bg-slate-100 text-slate-900';
@@ -588,6 +616,7 @@ const App: React.FC = () => {
                 {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState === 'started' && selectedIntent && (
                   <p className="ml-10 mt-0.5 max-w-2xl text-xs text-slate-500" role="status">
                     {t('intentSelected', { label: getIntentDisplayLabel(selectedIntent, locale) })}
+                    {industryName ? ` / ${t('industryContextLabel', { label: industryName })}` : ''}
                   </p>
                 )}
               </React.Fragment>
@@ -611,7 +640,7 @@ const App: React.FC = () => {
             />
           )}
 
-          {readyForContact && !showHandoff && !submitted && !faqResolved && !showFaqPrompt && (
+          {readyHandoffVisible && (
             <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-4 py-3">
               <p className="text-xs leading-relaxed text-slate-600">{t('readyForContact')}</p>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -665,6 +694,35 @@ const App: React.FC = () => {
               >
                 {t('newConversation')}
               </button>
+            </div>
+          )}
+
+          {!showHandoff && !submitted && !faqResolved && appMode === 'intake' && (
+            <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-4 py-3">
+              {notice === 'boundary' && industryLead && (
+                <p className="max-w-2xl text-sm leading-relaxed text-slate-800" role="note">{industryLead}</p>
+              )}
+              {notice === 'question' && industryLine && (
+                <div className="max-w-2xl space-y-1" role="note">
+                  {industryLine.split('\n').map((paragraph) => (
+                    <p key={paragraph} className="text-sm leading-relaxed text-slate-800">{paragraph}</p>
+                  ))}
+                </div>
+              )}
+              {notice !== 'none' && industryName && (
+                <p className="text-xs text-slate-500" role="status">{t('industryContextLabel', { label: industryName })}</p>
+              )}
+              <p className="text-xs leading-relaxed text-slate-500">{t('unavailableExtensions')}</p>
+              {directHandoffVisible && (
+                <button
+                  type="button"
+                  onClick={() => setShowHandoff(true)}
+                  disabled={isLoading}
+                  className="min-h-11 text-left text-sm font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:text-slate-400"
+                >
+                  {t('skipChatHandoff')}
+                </button>
+              )}
             </div>
           )}
 
