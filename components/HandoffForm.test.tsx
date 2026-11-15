@@ -33,6 +33,18 @@ describe('HandoffForm', () => {
     expect(markup).toContain('会社名（任意）');
   });
 
+  it('links to the privacy policy next to the hint, before the fields', () => {
+    const markup = renderForm();
+    const hint = markup.indexOf('担当からのご連絡にのみ使用します。');
+    const link = markup.indexOf('href="/privacy/#ai-reception"');
+    const firstField = markup.indexOf('お名前（必須）');
+
+    expect(hint).toBeGreaterThan(-1);
+    expect(link).toBeGreaterThan(hint);
+    expect(link).toBeLessThan(firstField);
+    expect(markup).toMatch(/<a href="\/privacy\/#ai-reception" target="_blank" rel="noopener noreferrer"/);
+  });
+
   it('puts the submit button before the secondary actions', () => {
     const markup = renderForm();
     const submit = markup.indexOf('問い合わせを送信');
