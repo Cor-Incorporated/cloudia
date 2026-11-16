@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import PrivacyPolicyLink from './PrivacyPolicyLink';
 
 export interface HandoffValues {
   name: string;
@@ -44,7 +45,10 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, o
   return (
     <form onSubmit={handleSubmit} className="relative space-y-3 border-t border-slate-200 bg-white p-4">
       <p className="text-sm font-medium text-slate-900">{t('handoffTitle')}</p>
-      <p className="text-xs text-slate-500">{t('handoffHint')}</p>
+      <p className="text-xs text-slate-500">
+        {t('handoffHint')}
+        <PrivacyPolicyLink className="mt-1 block" />
+      </p>
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="space-y-1 text-xs text-slate-700">
           <span>{t('handoffName')}</span>

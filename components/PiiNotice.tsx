@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import PrivacyPolicyLink from './PrivacyPolicyLink';
 
 const PiiNotice: React.FC = () => {
   const { t } = useLanguage();
@@ -10,6 +11,7 @@ const PiiNotice: React.FC = () => {
       role="note"
     >
       {t('piiNotice')}
+      <PrivacyPolicyLink className="mt-1 block" />
     </p>
   );
 };
