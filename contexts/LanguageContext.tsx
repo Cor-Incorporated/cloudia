@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { translations, Locale } from '../translations';
+import { resolveUiLocale } from '../utils/contactLocale';
 
 interface LanguageContextType {
   locale: Locale;
@@ -12,19 +13,11 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   // Attempt to get language from localStorage or default to browser language or 'en'
   const getInitialLocale = (): Locale => {
-    const queryLocale = new URLSearchParams(window.location.search).get('locale');
-    if (queryLocale === 'ja' || queryLocale === 'en') {
-      return queryLocale;
-    }
-    const storedLocale = localStorage.getItem('app-locale') as Locale;
-    if (storedLocale && translations[storedLocale]) {
-      return storedLocale;
-    }
-    const browserLang = navigator.language.split('-')[0] as Locale;
-    if (translations[browserLang]) {
-      return browserLang;
-    }
-    return 'en';
+    return resolveUiLocale({
+      query: new URLSearchParams(window.location.search).get('locale'),
+      stored: localStorage.getItem('app-locale'),
+      browserLanguage: navigator.language,
+    });
   };
 
   const [locale, setLocaleState] = useState<Locale>(getInitialLocale());

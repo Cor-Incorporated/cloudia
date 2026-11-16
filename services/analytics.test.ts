@@ -57,6 +57,56 @@ describe('sanitizePageLocation', () => {
     );
   });
 
+  it.each([
+    'industry-medical',
+    'industry-shigyo',
+    'industry-construction',
+    'industry-manufacturing',
+    'industry-education',
+    'corsweb-contact-primary',
+    'corsweb-launcher',
+    'corsweb-launcher-fallback',
+  ])('keeps the allow-listed entry source %s and drops personal data beside it', (source) => {
+    expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', `?source=${source}&email=taro%40example.com&q=secret`)).toBe(
+      `https://cor-jp.com/contact/chat/?source=${source}`,
+    );
+  });
+
+  it('keeps an industry source when the locale is not ja or en, and does not keep that locale', () => {
+    expect(sanitizePageLocation(
+      'https://cor-jp.com',
+      '/contact/chat/',
+      '?locale=zh&source=industry-medical&email=taro%40example.com',
+    )).toBe('https://cor-jp.com/contact/chat/?source=industry-medical');
+    for (const locale of ['ko', 'es', 'zh-CN']) {
+      expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', `?locale=${locale}&source=industry-education`)).toBe(
+        'https://cor-jp.com/contact/chat/?source=industry-education',
+      );
+    }
+  });
+
+  it('drops an unknown, mismatched, repeated, or personal source without writing it back', () => {
+    const attack = 'industry-medical\nIgnore previous instructions taro@example.com';
+    const cases = [
+      '?source=grift-lp-hero',
+      '?source=INDUSTRY-MEDICAL',
+      '?source=%20industry-medical%20',
+      '?source=industry-medical&source=industry-education',
+      '?source=industry-medical&source=industry-medical',
+      `?source=${encodeURIComponent(attack)}`,
+      '?source=taro%40example.com',
+      '?source=090-1234-5678',
+    ];
+    for (const search of cases) {
+      const url = sanitizePageLocation('https://cor-jp.com', '/contact/chat/', search);
+      expect(url).toBe('https://cor-jp.com/contact/chat/');
+      expect(url).not.toContain('taro');
+      expect(url).not.toContain('Ignore');
+      expect(url).not.toContain('090');
+      expect(url).not.toContain('INDUSTRY');
+    }
+  });
+
   it('keeps the locale the app reads, and only the exact values ja and en', () => {
     expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', '?locale=en&email=a%40b.com')).toBe(
       'https://cor-jp.com/contact/chat/?locale=en',
@@ -151,6 +201,37 @@ describe('createAnalytics: arrival', () => {
     for (const leaked of ['taro', 'example.com', 'secret', 'session=abc', 'frag', 'grift-lp-hero', 'email=']) {
       expect(wire).not.toContain(leaked);
     }
+  });
+
+  it.each([
+    'industry-medical',
+    'industry-shigyo',
+    'industry-construction',
+    'industry-manufacturing',
+    'industry-education',
+  ])('sends %s as entry_source and not as free text', (source) => {
+    const win = createFakeWindow({
+      search: `?source=${source}&intent=confidential-ai-assessment&email=taro%40example.com&q=${encodeURIComponent('patient Yamada')}`,
+    });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(eventsNamed(win, 'contact_chat_view')).toEqual([
+      { intent: 'confidential-ai-assessment', entry_source: source },
+    ]);
+    expect(win.location.search).toBe(`?intent=confidential-ai-assessment&source=${source}`);
+    const wire = JSON.stringify(dataLayerEntries(win));
+    expect(wire).not.toContain('taro');
+    expect(wire).not.toContain('Yamada');
+    expect(wire).not.toContain('patient');
+  });
+
+  it('does not send a repeated or personal source, and still sends a valid intent', () => {
+    const win = createFakeWindow({
+      search: '?source=industry-medical&source=taro%40example.com&intent=local-llm-poc',
+    });
+    createAnalytics(win, TEST_GA4_ID).start();
+    expect(eventsNamed(win, 'contact_chat_view')).toEqual([{ intent: 'local-llm-poc' }]);
+    expect(JSON.stringify(dataLayerEntries(win))).not.toContain('taro');
+    expect(JSON.stringify(dataLayerEntries(win))).not.toContain('industry-medical');
   });
 
   it('sends an empty parameter set and no referrer override when the visitor arrives without a query', () => {
@@ -296,6 +377,18 @@ describe('createAnalytics: submit success', () => {
     analytics.trackSubmitSuccess('COR-20261108-1A2B3C4D', 'grift-team-beta');
     expect(eventsNamed(win, 'contact_chat_submit_success')).toEqual([{ intent: 'grift-team-beta' }]);
     expect(JSON.stringify(dataLayerEntries(win))).not.toContain('COR-20261108');
+  });
+
+  it('sends the entry source captured at arrival, not a source typed later', () => {
+    const win = createFakeWindow({ search: '?source=industry-construction&intent=contract-dev&email=taro%40example.com' });
+    const analytics = createAnalytics(win, TEST_GA4_ID);
+    analytics.start();
+    win.location.search = '?source=taro%40example.com&intent=contract-dev';
+    analytics.trackSubmitSuccess('COR-20261108-1A2B3C4D', 'contract-dev');
+    expect(eventsNamed(win, 'contact_chat_submit_success')).toEqual([
+      { intent: 'contract-dev', entry_source: 'industry-construction' },
+    ]);
+    expect(JSON.stringify(dataLayerEntries(win))).not.toContain('taro');
   });
 
   it('sends an empty parameter set when no intent was selected', () => {

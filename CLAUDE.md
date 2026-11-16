@@ -35,7 +35,7 @@ Leave `VITE_CONTACT_API_BASE` empty when Cloudia is mounted on the same origin a
 1. `ChatInput` sends user text to `App`.
 2. `App` bounds the conversation with `toApiMessages`.
 3. Both `intake` and `ambassador` modes call `POST /api/contact/chat` through `services/contactChatClient.ts`.
-4. The request includes validated `mode`, `locale`, `intent`, and fixed `source: cloudia` fields.
+4. The request includes validated `mode`, `locale`, and `intent`. `source` is an allow-listed entry source (five `industry-*` values, `corsweb-contact-primary`, `corsweb-launcher`, `corsweb-launcher-fallback`) or the fixed client tag `cloudia`. Only the five industry values change the first reply. The raw query is never copied in.
 5. corsweb's Worker builds the mode-specific system instruction and company context, calls Vertex Gemini, and normalizes the response.
 6. Cloudia renders the plain-text `reply` and derives an avatar expression from the normalized workflow result.
 
