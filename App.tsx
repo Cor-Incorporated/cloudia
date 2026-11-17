@@ -5,6 +5,7 @@ import ChatMessage from './components/ChatMessage';
 import ExpressionAvatar from './components/ExpressionAvatar';
 import IntentPicker from './components/IntentPicker';
 import PiiNotice from './components/PiiNotice';
+import IntroPanel from './components/IntroPanel';
 import HandoffForm, { HandoffValues } from './components/HandoffForm';
 import FallbackNotice from './components/FallbackNotice';
 import FaqResolutionPrompt from './components/FaqResolutionPrompt';
@@ -12,6 +13,15 @@ import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
 import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget } from './utils/chatView';
+import {
+  classifyReturnTarget,
+  persistReturnTarget,
+  readStoredReturnTarget,
+  resolveReturnTarget,
+  RETURN_LINK_LABEL_KEYS,
+  safeSessionStorage,
+} from './utils/returnTarget';
+import { INTRO_BOOKING_NOTICE_VISIBLE } from './constants/introPanel';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import { parseEntrySourceFromSearch } from './constants/entrySources';
 import { industryContextLine, industryLabel, industryNotice, industryOpening } from './constants/industryGuidance';
@@ -81,13 +91,39 @@ function isFaqFullyResolved(result: ChatResult): boolean {
   return result.faqResolution === 'answered';
 }
 
-const App: React.FC = () => {
+interface AppProps {
+  /** 説明の区画の「準備中」の行の旗（既定は constants/introPanel.ts の旗）。 */
+  bookingNoticeVisible?: boolean;
+}
+
+const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_VISIBLE }) => {
   const { locale, setLocale, t } = useLanguage();
   const appMode: AppMode = useMemo(() => resolveAppMode(), []);
   const embedMode = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('embed') === '1';
   }, []);
+
+  // 戻る先。同じ tab の間は、mode の切り替えや再読み込みの後も同じ先を使う
+  // （chat の中の遷移で取り直さない）。embed（枠の中）では戻る link を出さない。
+  // 決定は純関数（utils/returnTarget.ts）で行い、useMemo の中では storage に書かない。
+  const returnDecision = useMemo(() => {
+    if (embedMode || typeof window === 'undefined') return null;
+    return resolveReturnTarget(
+      typeof document === 'undefined' ? null : document.referrer,
+      window.location.href,
+      locale,
+      readStoredReturnTarget(safeSessionStorage()),
+    );
+  }, [embedMode, locale]);
+  const returnHref = returnDecision?.href ?? null;
+  const returnLabelKind = returnHref ? classifyReturnTarget(returnHref) : null;
+  const returnLabelKey = returnLabelKind ? RETURN_LINK_LABEL_KEYS[returnLabelKind] : null;
+
+  useEffect(() => {
+    if (!returnDecision || typeof window === 'undefined') return;
+    persistReturnTarget(returnDecision, safeSessionStorage());
+  }, [returnDecision]);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -505,49 +541,77 @@ const App: React.FC = () => {
     startSettled: intentStartState === 'started' || apiDegraded,
   });
   const shellClass = embedMode
-    ? 'flex h-dvh min-h-[520px] w-full overflow-hidden bg-slate-100 text-slate-900'
-    : 'flex h-dvh min-h-dvh overflow-hidden bg-slate-100 text-slate-900';
+    ? 'flex h-dvh min-h-[520px] w-full overflow-hidden bg-stone-50 text-slate-900'
+    : 'flex h-dvh min-h-dvh overflow-hidden bg-stone-50 text-slate-900';
 
   return (
     <div className={`${shellClass} flex-col`} data-embed={embedMode ? 'true' : 'false'}>
       {!embedMode && (
         <header id="app-header" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex-nowrap sm:px-5">
+          {/* 絵（avatar）は link にしない。戻る link は文字の 1 本だけにして、
+              読み上げと tab の止まる所を増やさない。題（h1）は link の外に置く
+              （span の中に h1 は置けないため）。 */}
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <ExpressionAvatar emotion={displayEmotion} size={48} compact className="shrink-0" />
+            {returnHref && returnLabelKey && (
+              <ExpressionAvatar emotion={displayEmotion} size={48} compact />
+            )}
             <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base">{t('title')}</h1>
+              <h1 className="leading-tight text-sm font-semibold text-slate-900 sm:truncate sm:text-base">{t('title')}</h1>
               {isContactChatMock() && appMode === 'intake' && (
                 <p className="truncate text-xs text-amber-700">contact-chat MOCK</p>
               )}
             </div>
           </div>
-          <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+          {/*
+            右の塊は 2 つの組に分ける。DOM の順は「link の組 → 言語の組」で
+            読み上げと tab の順を今のまま保ち、見た目の並びは order-* で組む。
+            狭い画面（640px 未満）: 1 段目 = 題（伸びる）+ 言語の組（縮まない）／
+            2 段目 = link の組（幅いっぱい・右寄せ・中の折り返しは許す）。
+            広い画面（sm 以上）: 今と同じ 1 段（題 → link の組 → 言語の組）。
+          */}
+          <div
+            data-testid="header-links"
+            className="order-3 flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:order-2 sm:w-auto"
+          >
+            {returnHref && returnLabelKey && (
+              <a
+                href={returnHref}
+                className="min-h-11 px-1 py-3 text-xs font-medium text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy sm:text-sm"
+              >
+                {t(returnLabelKey)}
+              </a>
+            )}
             {(selectedIntent || messages.length > 1 || submitted) && (
               <button
                 type="button"
                 onClick={handleStartNewConversation}
-                className="min-h-11 px-1 text-xs font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:text-sm"
+                className="min-h-11 px-1 text-xs font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy sm:text-sm"
               >
                 {t('newConversation')}
               </button>
             )}
             <a
               href={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
-              className="min-h-11 px-1 py-3 text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:text-sm"
+              className="min-h-11 px-1 py-3 text-xs font-medium text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy sm:text-sm"
             >
               {t(appMode === 'ambassador' ? 'intakeLink' : 'ambassadorLink')}
             </a>
+          </div>
+          <div
+            data-testid="header-languages"
+            className="order-2 flex shrink-0 items-center gap-2 sm:order-3"
+          >
             <button
               type="button"
               onClick={() => setLocale('en')}
-              className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${locale === 'en' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy ${locale === 'en' ? 'bg-navy text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               English
             </button>
             <button
               type="button"
               onClick={() => setLocale('ja')}
-              className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${locale === 'ja' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy ${locale === 'ja' ? 'bg-navy text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
             >
               日本語
             </button>
@@ -583,7 +647,7 @@ const App: React.FC = () => {
               <button
                 type="button"
                 onClick={handleStopRequest}
-                className="min-h-11 px-1 font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                className="min-h-11 px-1 font-medium text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
               >
                 {t('stopRequest')}
               </button>
@@ -592,12 +656,18 @@ const App: React.FC = () => {
 
           <div
             ref={listRef}
-            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-slate-100 p-3 custom-scrollbar sm:p-5"
+            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-stone-50 p-3 custom-scrollbar sm:p-5"
             aria-live="polite"
             aria-relevant="additions"
             aria-busy={isLoading}
             role="log"
           >
+            <IntroPanel
+              mode={appMode}
+              modeSwitchHref={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
+              calendarTarget={embedMode ? '_top' : undefined}
+              bookingNoticeVisible={bookingNoticeVisible && !industryEntryPanelVisible}
+            />
             {messages.map((msg, index) => (
               <React.Fragment key={msg.id}>
                 <ChatMessage message={msg} plainText />
@@ -647,14 +717,14 @@ const App: React.FC = () => {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button
                   type="button"
-                  className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                  className="min-h-11 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
                   onClick={() => setShowHandoff(true)}
                 >
                   {t('showHandoff')}
                 </button>
                 <button
                   type="button"
-                  className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                  className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
                   onClick={() => inputRef.current?.focus()}
                 >
                   {t('continueChat')}
@@ -678,7 +748,7 @@ const App: React.FC = () => {
             <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
               <button
                 type="button"
-                className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                className="min-h-11 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
                 onClick={handleStartNewConversation}
               >
                 {t('newConversation')}
@@ -690,7 +760,7 @@ const App: React.FC = () => {
             <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
               <button
                 type="button"
-                className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                className="min-h-11 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
                 onClick={handleStartNewConversation}
               >
                 {t('newConversation')}
@@ -719,7 +789,7 @@ const App: React.FC = () => {
                   type="button"
                   onClick={() => setShowHandoff(true)}
                   disabled={isLoading}
-                  className="min-h-11 text-left text-sm font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:text-slate-400"
+                  className="min-h-11 text-left text-sm font-medium text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:text-slate-400"
                 >
                   {t('skipChatHandoff')}
                 </button>

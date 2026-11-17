@@ -9,7 +9,15 @@ module.exports = {
     "./App.tsx",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        // サイト（corsweb）の主色の紺。NextStep.astro の bg-[#2d4a6b]、hover #1e3350 と同じ値。
+        navy: {
+          DEFAULT: '#2d4a6b',
+          dark: '#1e3350',
+        },
+      },
+    },
   },
   plugins: [],
 }

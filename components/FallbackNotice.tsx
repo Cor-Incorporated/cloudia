@@ -24,7 +24,7 @@ const FallbackNotice: React.FC<FallbackNoticeProps> = ({ visible, onRetry }) => 
         <button
           type="button"
           onClick={onRetry}
-          className="min-h-11 text-blue-700 underline underline-offset-2 hover:text-blue-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+          className="min-h-11 text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
         >
           {t('retry')}
         </button>
