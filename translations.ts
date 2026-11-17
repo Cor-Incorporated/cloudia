@@ -146,7 +146,7 @@ export const translations = {
     introHeading: "ここは、Cor.株式会社の公式の AI 受付です",
     introHandoff:
       "ご相談の内容を、AI が質問しながら整理し、担当者へ引き継ぎます（後日、担当からご連絡します）。",
-    introChatBefore: "Cor. や AI についての質問は、『",
+    introChatBefore: "Cor. や AI についての質問は、「",
     introChatAfter: "」でお答えします。",
     introReceptionBefore: "具体的なご相談は、",
     introReceptionLink: "お問い合わせ受付",

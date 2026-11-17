@@ -170,6 +170,33 @@ describe('intro panel', () => {
     expect(markup).not.toContain(translations.ja.introBookingPreparation);
     expect(markup).toContain(translations.ja.unavailableExtensions);
   });
+
+  it('keeps every bracket pair inside the intro panel balanced in Japanese and English', () => {
+    const bracketPairs: Array<[string, string]> = [
+      ['「', '」'],
+      ['『', '』'],
+      ['(', ')'],
+      ['（', '）'],
+    ];
+
+    const renderIntroPanelMarkup = (search: string) => {
+      stubBrowser({ search });
+      const markup = renderApp();
+      const start = markup.indexOf('data-testid="cloudia-intro-panel"');
+      expect(start, 'intro panel is rendered').toBeGreaterThan(-1);
+      return markup.slice(start, markup.indexOf('</div>', start));
+    };
+
+    // 既定の受付 mode で、雑談への案内の行（introChatBefore … introChatAfter）も区画の中に出る。
+    for (const search of ['', '?locale=en']) {
+      const panel = renderIntroPanelMarkup(search);
+      for (const [open, close] of bracketPairs) {
+        const opened = panel.split(open).length - 1;
+        const closed = panel.split(close).length - 1;
+        expect(opened, `search "${search}": ${open} × ${opened} vs ${close} × ${closed}`).toBe(closed);
+      }
+    }
+  });
 });
 
 describe('return target when sessionStorage cannot be read', () => {
