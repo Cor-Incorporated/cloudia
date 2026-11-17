@@ -19,6 +19,7 @@ import {
   readStoredReturnTarget,
   resolveReturnTarget,
   RETURN_LINK_LABEL_KEYS,
+  safeSessionStorage,
 } from './utils/returnTarget';
 import { INTRO_BOOKING_NOTICE_VISIBLE } from './constants/introPanel';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
@@ -112,7 +113,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
       typeof document === 'undefined' ? null : document.referrer,
       window.location.href,
       locale,
-      readStoredReturnTarget(window.sessionStorage ?? null),
+      readStoredReturnTarget(safeSessionStorage()),
     );
   }, [embedMode, locale]);
   const returnHref = returnDecision?.href ?? null;
@@ -121,7 +122,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
 
   useEffect(() => {
     if (!returnDecision || typeof window === 'undefined') return;
-    persistReturnTarget(returnDecision, window.sessionStorage ?? null);
+    persistReturnTarget(returnDecision, safeSessionStorage());
   }, [returnDecision]);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -547,17 +548,12 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
     <div className={`${shellClass} flex-col`} data-embed={embedMode ? 'true' : 'false'}>
       {!embedMode && (
         <header id="app-header" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex-nowrap sm:px-5">
-          {/* 絵（avatar）だけが戻る先の link。題（h1）と MOCK の表示は link の外に置く
-              （span の中に h1 は置けず、link の aria-label が題を読み替えてしまうため）。 */}
+          {/* 絵（avatar）は link にしない。戻る link は文字の 1 本だけにして、
+              読み上げと tab の止まる所を増やさない。題（h1）は link の外に置く
+              （span の中に h1 は置けないため）。 */}
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {returnHref && returnLabelKey && (
-              <a
-                href={returnHref}
-                aria-label={t(returnLabelKey)}
-                className="shrink-0 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
-              >
-                <ExpressionAvatar emotion={displayEmotion} size={48} compact />
-              </a>
+              <ExpressionAvatar emotion={displayEmotion} size={48} compact />
             )}
             <div className="min-w-0">
               <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base">{t('title')}</h1>
@@ -655,7 +651,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
               mode={appMode}
               modeSwitchHref={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
               calendarTarget={embedMode ? '_top' : undefined}
-              bookingNoticeVisible={bookingNoticeVisible}
+              bookingNoticeVisible={bookingNoticeVisible && !industryEntryPanelVisible}
             />
             {messages.map((msg, index) => (
               <React.Fragment key={msg.id}>

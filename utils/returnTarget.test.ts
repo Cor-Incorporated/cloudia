@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALLOWED_RETURN_HOSTS,
   classifyReturnTarget,
   entrySourceReturnHref,
   persistReturnTarget,
   readStoredReturnTarget,
   resolveReturnTarget,
   RETURN_LINK_LABEL_KEYS,
+  RETURN_TARGET_STORAGE_KEY,
   saveReturnTarget,
 } from './returnTarget';
 
@@ -99,48 +101,60 @@ describe('return target storage', () => {
   it('persists only what the decision says to save, overwriting the previous value', () => {
     const storage = memoryStorage();
     saveReturnTarget('https://cor-jp.com/industries/medical/', storage);
-    persistReturnTarget({ href: 'https://cor-jp.com/', save: 'https://cor-jp.com/' }, storage);
+    persistReturnTarget({ href: 'https://cor-jp.com/', save: 'https://cor-jp.com/', clear: false }, storage);
     expect(readStoredReturnTarget(storage)).toBe('https://cor-jp.com/');
   });
 
   it('leaves the stored value untouched when the decision says not to save', () => {
     const storage = memoryStorage();
     saveReturnTarget('https://cor-jp.com/industries/medical/', storage);
-    persistReturnTarget({ href: '/', save: null }, storage);
-    persistReturnTarget({ href: '/', save: null }, null);
+    persistReturnTarget({ href: '/', save: null, clear: false }, storage);
+    persistReturnTarget({ href: '/', save: null, clear: false }, null);
     expect(readStoredReturnTarget(storage)).toBe('https://cor-jp.com/industries/medical/');
+  });
+
+  it('removes the stored value when the decision says to clear', () => {
+    const storage = memoryStorage();
+    saveReturnTarget('https://cor-jp.com/industries/shigyo/', storage);
+    persistReturnTarget({ href: '/industries/medical/', save: null, clear: true }, storage);
+    expect(readStoredReturnTarget(storage)).toBeNull();
+    expect(storage.getItem(RETURN_TARGET_STORAGE_KEY)).toBeNull();
   });
 });
 
 describe('resolveReturnTarget with the stored value (3-stage decision)', () => {
   const TOP_URL = 'https://cor-jp.com/';
   const MEDICAL_URL = 'https://cor-jp.com/industries/medical/';
+  const SHIGYO_URL = 'https://cor-jp.com/industries/shigyo/';
 
   it('(a) a fresh allow-listed referrer wins over the stored target and overwrites it', () => {
     const decision = resolveReturnTarget(TOP_URL, CHAT_URL, 'ja', MEDICAL_URL);
     expect(decision.href).toBe(TOP_URL);
     expect(decision.save).toBe(TOP_URL);
+    expect(decision.clear).toBe(false);
   });
 
   it('(b) a self-chat navigation keeps using the stored target', () => {
     const decision = resolveReturnTarget(CHAT_URL, CHAT_URL, 'ja', MEDICAL_URL);
     expect(decision.href).toBe(MEDICAL_URL);
+    expect(decision.clear).toBe(false);
   });
 
-  it('(c) without a referrer, source= decides and nothing is stored', () => {
+  it('(c) without a referrer, source= decides even when a different page was stored', () => {
     const decision = resolveReturnTarget(
       null,
       'https://cor-jp.com/contact/chat/?source=industry-medical',
       'ja',
-      MEDICAL_URL,
+      SHIGYO_URL,
     );
     expect(decision.href).toBe('/industries/medical/');
     expect(decision.save).toBeNull();
+    expect(decision.clear).toBe(true);
   });
 
   it('(d) with no stored value, no referrer and no source, the localized top is used and nothing is stored', () => {
-    expect(resolveReturnTarget(null, CHAT_URL, 'ja', null)).toEqual({ href: '/', save: null });
-    expect(resolveReturnTarget(null, CHAT_URL_EN, 'en', null)).toEqual({ href: '/en/', save: null });
+    expect(resolveReturnTarget(null, CHAT_URL, 'ja', null)).toEqual({ href: '/', save: null, clear: true });
+    expect(resolveReturnTarget(null, CHAT_URL_EN, 'en', null)).toEqual({ href: '/en/', save: null, clear: true });
   });
 
   it('(e) a stored target that fails the allow-list check is treated as missing', () => {
@@ -151,9 +165,25 @@ describe('resolveReturnTarget with the stored value (3-stage decision)', () => {
       'https://example.com/page/',
     );
     expect(decision.href).toBe('/industries/medical/');
+    expect(decision.clear).toBe(true);
 
     // 相対 path（古い保存値 `/` など）と http も、同じ検査で無い物として扱う。
     expect(resolveReturnTarget(CHAT_URL, CHAT_URL, 'ja', '/').href).toBe('/');
     expect(resolveReturnTarget(CHAT_URL, CHAT_URL, 'ja', 'http://griftai.org/').href).toBe('/');
+  });
+
+  it('marks only the third stage as clearing the stored value', () => {
+    // 1 段目（許した host の referrer）は上書き、2 段目（chat 自身）はそのまま。
+    expect(resolveReturnTarget(TOP_URL, CHAT_URL, 'ja', MEDICAL_URL).clear).toBe(false);
+    expect(resolveReturnTarget(CHAT_URL, CHAT_URL, 'ja', MEDICAL_URL).clear).toBe(false);
+    // 3 段目（referrer 無し・一覧外）は消す。
+    expect(resolveReturnTarget(null, CHAT_URL, 'ja', MEDICAL_URL).clear).toBe(true);
+    expect(resolveReturnTarget('https://evil.example/', CHAT_URL, 'ja', MEDICAL_URL).clear).toBe(true);
+  });
+});
+
+describe('allow-listed return hosts', () => {
+  it('pins the list to exactly the four site hosts', () => {
+    expect([...ALLOWED_RETURN_HOSTS]).toEqual(['cor-jp.com', 'www.cor-jp.com', 'griftai.org', 'www.griftai.org']);
   });
 });

@@ -7,7 +7,7 @@ import { CONTACT_PAGE_PATHS, SITE_TOP_PATHS } from '../constants/siteLinks';
  * 戻る先として許す host（https のみ）。この一覧に無い host は、来た元としても
  * 戻る先にしない（外の誰かが作った link で、知らない場所へ飛ばさないため）。
  */
-const ALLOWED_RETURN_HOSTS = ['cor-jp.com', 'www.cor-jp.com', 'griftai.org', 'www.griftai.org'] as const;
+export const ALLOWED_RETURN_HOSTS = ['cor-jp.com', 'www.cor-jp.com', 'griftai.org', 'www.griftai.org'] as const;
 const GRIFT_RETURN_HOSTS = ['griftai.org', 'www.griftai.org'] as const;
 const COR_RETURN_HOSTS = ['cor-jp.com', 'www.cor-jp.com'] as const;
 
@@ -111,6 +111,8 @@ export interface ReturnTargetDecision {
   href: string;
   /** storage に残す値。残さない時は null。 */
   save: string | null;
+  /** 前に残した値を storage から消すか（3 段目だけ true）。 */
+  clear: boolean;
 }
 
 /**
@@ -122,6 +124,8 @@ export interface ReturnTargetDecision {
  *    残してある値が有効 → 残してある値を使う（mode の切り替えの後も同じ先）。
  * 3. それ以外（referrer が無い・一覧に無い host）→ ?source= の page、無ければサイトの top。
  *    この値は残さない（言語を切り替えたら top は言語に合わせて変わる）。残してある値も使わない。
+ *    代わりに消す（clear: true）。残すと、その後の mode 切替（referrer が chat 自身）で
+ *    2 段目が前の page を復活させてしまう。
  */
 export function resolveReturnTarget(
   referrer: string | null | undefined,
@@ -131,19 +135,32 @@ export function resolveReturnTarget(
 ): ReturnTargetDecision {
   const referrerUrl = parseHttpUrl(referrer);
   if (referrerUrl && isAllowedReturnUrl(referrerUrl) && !isChatPath(referrerUrl)) {
-    return { href: referrerUrl.href, save: referrerUrl.href };
+    return { href: referrerUrl.href, save: referrerUrl.href, clear: false };
   }
   if (referrerUrl && isSelfChatReferrer(referrerUrl, currentUrl)) {
     const validatedStored = validStoredReturnHref(stored);
-    if (validatedStored) return { href: validatedStored, save: null };
+    if (validatedStored) return { href: validatedStored, save: null, clear: false };
   }
   const fromSource = entrySourceReturnHref(currentUrl, locale);
-  return { href: fromSource ?? SITE_TOP_PATHS[locale], save: null };
+  return { href: fromSource ?? SITE_TOP_PATHS[locale], save: null, clear: true };
 }
 
 export const RETURN_TARGET_STORAGE_KEY = 'cloudia:return-target';
 
-type MinimalStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+export type MinimalStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+/**
+ * window.sessionStorage を安全に取る。property の読み出し自体が例外を投げる環境
+ * （storage を block した browser 等）でも、描画を止めずに null を返す。
+ */
+export function safeSessionStorage(): MinimalStorage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** 前に決めた戻る先を読む。無い・壊れている・storage が使えないときは null。 */
 export function readStoredReturnTarget(storage: MinimalStorage | null): string | null {
@@ -178,9 +195,19 @@ export function saveReturnTarget(href: string, storage: MinimalStorage | null): 
 
 /**
  * 決まった戻り先を storage へ反映する。App の effect（描画の外）から呼ぶ。
- * save が決まっていない時（3 段目）は書かないので、前に残した値はそのまま残る。
+ * clear の時（3 段目）は前に残した値を消す（storage が使えない環境では何もしない）。
+ * 1 段目は save で上書きし、2 段目は save も clear も無いので何もしない。
  */
 export function persistReturnTarget(decision: ReturnTargetDecision, storage: MinimalStorage | null): void {
+  if (!storage) return;
+  if (decision.clear) {
+    try {
+      storage.removeItem(RETURN_TARGET_STORAGE_KEY);
+    } catch {
+      // Storage can be unavailable in privacy-restricted browser contexts.
+    }
+    return;
+  }
   if (!decision.save) return;
   saveReturnTarget(decision.save, storage);
 }

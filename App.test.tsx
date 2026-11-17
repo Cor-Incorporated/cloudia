@@ -75,7 +75,8 @@ describe('App header return link (outside the embed frame)', () => {
 
     expect(markup).toContain('href="/"');
     expect(markup).toContain('Cor. のサイトに戻る');
-    expect(markup).toContain('aria-label="Cor. のサイトに戻る"');
+    // 戻る link は文字の 1 本だけ（絵は link にしない）。
+    expect(markup.match(/Cor\. のサイトに戻る/g)).toHaveLength(1);
   });
 
   it('points to the English site top when the UI language is English', () => {
@@ -94,12 +95,22 @@ describe('App header return link (outside the embed frame)', () => {
 
     // The write happens in a commit-phase effect, which static rendering does not run;
     // persist the first page load's decision the same way App does.
-    persistReturnTarget({ href: 'https://cor-jp.com/industries/medical/', save: 'https://cor-jp.com/industries/medical/' }, shared);
+    persistReturnTarget({ href: 'https://cor-jp.com/industries/medical/', save: 'https://cor-jp.com/industries/medical/', clear: false }, shared);
 
     stubBrowser({ search: '', referrer: 'https://cor-jp.com/contact/chat/', storage: shared });
     const second = renderApp();
     expect(second).toContain('href="https://cor-jp.com/industries/medical/"');
     expect(second).not.toContain('href="https://cor-jp.com/contact/chat/"');
+  });
+
+  it('renders one return link in the header and leaves the avatar out of the link', () => {
+    stubBrowser({ search: '?source=industry-medical' });
+    const markup = renderApp();
+
+    const headerStart = markup.indexOf('<header id="app-header"');
+    expect(headerStart).toBeGreaterThan(-1);
+    const header = markup.slice(headerStart, markup.indexOf('</header>', headerStart));
+    expect(header.match(/href="\/industries\/medical\/"/g) ?? []).toHaveLength(1);
   });
 });
 
@@ -150,6 +161,83 @@ describe('intro panel', () => {
 
     expect(markup).toContain('ここは、Cor.株式会社の公式の AI 受付です');
     expect(markup).not.toContain('準備中');
+  });
+
+  it('shows the not-available note instead of the preparation line for an industry entry', () => {
+    stubBrowser({ search: '?source=industry-medical' });
+    const markup = renderApp();
+
+    expect(markup).not.toContain(translations.ja.introBookingPreparation);
+    expect(markup).toContain(translations.ja.unavailableExtensions);
+  });
+});
+
+describe('return target when sessionStorage cannot be read', () => {
+  it('renders the third-stage target instead of crashing on the sessionStorage getter', () => {
+    const win = {
+      location: {
+        search: '?source=industry-medical',
+        href: 'https://cor-jp.com/contact/chat/?source=industry-medical',
+        hostname: 'cor-jp.com',
+        pathname: '/contact/chat/',
+      },
+      confirm: () => true,
+    };
+    Object.defineProperty(win, 'sessionStorage', {
+      configurable: true,
+      get() {
+        throw new Error('storage access blocked');
+      },
+    });
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('navigator', { language: 'ja-JP' });
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
+    vi.stubGlobal('document', { referrer: '', title: '' });
+
+    const markup = renderApp();
+    expect(markup).toContain('href="/industries/medical/"');
+  });
+});
+
+describe('return target persistence effect', () => {
+  it('clears a stale stored target after a source= entry', async () => {
+    const stale = memoryStorage();
+    stale.setItem(RETURN_TARGET_STORAGE_KEY, 'https://cor-jp.com/industries/shigyo/');
+
+    vi.resetModules();
+    // Static rendering never runs effects. Run only the return-target effect (its
+    // dependency is the only decision object with `href` and `clear`) so the
+    // persistence wiring itself is exercised.
+    vi.doMock('react', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('react')>();
+      return {
+        ...actual,
+        useEffect: (effect: () => void, deps?: unknown[]) => {
+          const isReturnTargetEffect =
+            Array.isArray(deps) &&
+            deps.some(
+              (dep) => typeof dep === 'object' && dep !== null && 'href' in dep && 'clear' in dep,
+            );
+          if (isReturnTargetEffect) effect();
+        },
+      };
+    });
+    try {
+      stubBrowser({ search: '?source=industry-medical', storage: stale });
+      const [{ default: FreshApp }, { LanguageProvider: FreshProvider }, { renderToStaticMarkup: renderFresh }] =
+        await Promise.all([import('./App'), import('./contexts/LanguageContext'), import('react-dom/server')]);
+      const markup = renderFresh(
+        <FreshProvider>
+          <FreshApp />
+        </FreshProvider>,
+      );
+
+      expect(markup).toContain('href="/industries/medical/"');
+      expect(stale.getItem(RETURN_TARGET_STORAGE_KEY)).toBeNull();
+    } finally {
+      vi.doUnmock('react');
+      vi.resetModules();
+    }
   });
 });
 
@@ -206,5 +294,17 @@ describe('font loading', () => {
   it('does not preload fonts that no @font-face rule uses', () => {
     const source = readFileSync(join(import.meta.dirname, 'index.html'), 'utf8');
     expect(source).not.toContain('fonts.gstatic.com');
+  });
+
+  it('has no preload or preconnect to an external host', () => {
+    const source = readFileSync(join(import.meta.dirname, 'index.html'), 'utf8');
+    const links = source.match(/<link\b[^>]*>/g) ?? [];
+
+    for (const link of links) {
+      const rel = link.match(/\brel="([^"]*)"/)?.[1] ?? '';
+      if (!/^(preload|preconnect)$/i.test(rel)) continue;
+      const href = link.match(/\bhref="([^"]*)"/)?.[1] ?? '';
+      expect(href, `external ${rel}: ${link}`).not.toMatch(/^https?:\/\//i);
+    }
   });
 });
