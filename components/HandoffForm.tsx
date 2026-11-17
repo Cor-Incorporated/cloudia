@@ -40,7 +40,7 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, o
   };
 
   const field =
-    'min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100';
+    'min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-navy focus:ring-2 focus:ring-navy/20 disabled:bg-slate-100';
 
   return (
     <form onSubmit={handleSubmit} className="relative space-y-3 border-t border-slate-200 bg-white p-4">
@@ -80,7 +80,7 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, o
         <button
           type="submit"
           disabled={disabled}
-          className="min-h-11 w-full rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:bg-slate-300 sm:w-auto"
+          className="min-h-11 w-full rounded-lg bg-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:bg-slate-300 sm:w-auto"
         >
           {t('handoffSubmit')}
         </button>
@@ -88,7 +88,7 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, o
           type="button"
           disabled={disabled}
           onClick={onBack}
-          className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
         >
           {t('backToChat')}
         </button>
@@ -96,7 +96,7 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, o
           type="button"
           disabled={disabled}
           onClick={onCancel}
-          className="min-h-11 w-full px-2 py-2.5 text-sm text-slate-500 underline underline-offset-2 hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          className="min-h-11 w-full px-2 py-2.5 text-sm text-slate-500 underline underline-offset-2 hover:text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
         >
           {t('cancelConversation')}
         </button>

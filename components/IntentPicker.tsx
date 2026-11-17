@@ -26,10 +26,10 @@ const IntentPicker: React.FC<IntentPickerProps> = ({ selected, onSelect, disable
               disabled={disabled}
               onClick={() => onSelect(option.primaryIntent)}
               className={[
-                'min-h-11 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
+                'min-h-11 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy',
                 isSelected
-                  ? 'border-blue-600 bg-blue-600 text-white'
-                  : 'border-gray-300 bg-white text-gray-800 hover:border-blue-400 hover:bg-blue-50',
+                  ? 'border-navy bg-navy text-white'
+                  : 'border-gray-300 bg-white text-gray-800 hover:border-navy hover:bg-navy/5',
                 disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
               ].join(' ')}
               aria-pressed={isSelected}

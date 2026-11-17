@@ -26,7 +26,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, plainText = true }) 
                 href={source.uri}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-700 underline hover:text-blue-900"
+                className="text-navy underline hover:text-navy-dark"
               >
                 {source.title || source.uri}
               </a>
@@ -51,7 +51,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, plainText = true }) 
         className={[
           'max-w-[calc(100%-3rem)] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ring-1 ring-black/5 whitespace-pre-wrap break-words sm:max-w-xl',
           isUser
-            ? 'rounded-br-md bg-blue-600 text-white'
+            ? 'rounded-br-md bg-navy text-white'
             : 'rounded-bl-md bg-white text-slate-800',
         ].join(' ')}
       >
