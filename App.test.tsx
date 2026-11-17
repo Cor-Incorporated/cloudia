@@ -123,6 +123,16 @@ describe('App header grouping on narrow screens', () => {
     return markup.slice(headerStart, markup.indexOf('</header>', headerStart));
   }
 
+  function openingTagClass(markup: string, marker: string): string {
+    const markerAt = markup.indexOf(marker);
+    expect(markerAt, `${marker} is rendered`).toBeGreaterThan(-1);
+    const tagStart = markup.lastIndexOf('<', markerAt);
+    const tag = markup.slice(tagStart, markup.indexOf('>', markerAt) + 1);
+    const classAttribute = tag.match(/class="([^"]*)"/);
+    expect(classAttribute, 'the element has a class attribute').not.toBeNull();
+    return classAttribute![1];
+  }
+
   it('renders both the header-links group and the header-languages group outside the embed frame', () => {
     const header = renderHeader();
 
@@ -163,6 +173,39 @@ describe('App header grouping on narrow screens', () => {
 
     expect(linksStart).toBeGreaterThan(-1);
     expect(languagesStart).toBeGreaterThan(linksStart);
+  });
+
+  it('pins the ordering classes on the header-links group', () => {
+    const header = renderHeader();
+    const classes = openingTagClass(header, 'data-testid="header-links"').split(/\s+/);
+
+    expect(classes).toContain('order-3');
+    expect(classes).toContain('sm:order-2');
+    expect(classes).toContain('w-full');
+    expect(classes).toContain('sm:w-auto');
+  });
+
+  it('pins the ordering classes on the header-languages group', () => {
+    const header = renderHeader();
+    const classes = openingTagClass(header, 'data-testid="header-languages"').split(/\s+/);
+
+    expect(classes).toContain('order-2');
+    expect(classes).toContain('sm:order-3');
+    expect(classes).toContain('shrink-0');
+  });
+
+  it('lets the header title wrap on narrow screens and truncates only on wider screens', () => {
+    const header = renderHeader();
+    const h1Start = header.indexOf('<h1');
+    expect(h1Start, 'the header title is rendered').toBeGreaterThan(-1);
+    const tag = header.slice(h1Start, header.indexOf('>', h1Start) + 1);
+    const classAttribute = tag.match(/class="([^"]*)"/);
+    expect(classAttribute, 'the header title has a class attribute').not.toBeNull();
+    const classes = classAttribute![1].split(/\s+/);
+
+    expect(classes).toContain('sm:truncate');
+    expect(classes).not.toContain('truncate');
+    expect(classes).toContain('leading-tight');
   });
 
   it('hides both groups inside the embed frame', () => {

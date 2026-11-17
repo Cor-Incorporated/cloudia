@@ -556,7 +556,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
               <ExpressionAvatar emotion={displayEmotion} size={48} compact />
             )}
             <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base">{t('title')}</h1>
+              <h1 className="leading-tight text-sm font-semibold text-slate-900 sm:truncate sm:text-base">{t('title')}</h1>
               {isContactChatMock() && appMode === 'intake' && (
                 <p className="truncate text-xs text-amber-700">contact-chat MOCK</p>
               )}
