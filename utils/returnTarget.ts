@@ -57,21 +57,30 @@ export function classifyReturnTarget(href: string): ReturnLabelKind {
 }
 
 /**
- * 許した host の https referrer だけを戻る先の候補にする。
- * chat 自身（/contact/chat で始まる path）は、自分に戻る輪になるので使わない。
+ * 許した host の https URL か（https・一覧の host）。
  */
-function allowedReferrerHref(referrer: string | null | undefined): string | null {
-  if (!referrer) return null;
-  let url: URL;
+function isAllowedReturnUrl(url: URL): boolean {
+  return url.protocol === 'https:' && (ALLOWED_RETURN_HOSTS as readonly string[]).includes(url.host);
+}
+
+/** chat 自身の path か（/contact/chat で始まる）。自分に戻る輪になるので戻り先にしない。 */
+function isChatPath(url: URL): boolean {
+  return url.pathname.startsWith(CHAT_PATH_PREFIX);
+}
+
+function parseHttpUrl(href: string | null | undefined): URL | null {
+  if (!href) return null;
   try {
-    url = new URL(referrer);
+    return new URL(href);
   } catch {
     return null;
   }
-  if (url.protocol !== 'https:') return null;
-  if (!(ALLOWED_RETURN_HOSTS as readonly string[]).includes(url.host)) return null;
-  if (url.pathname.startsWith(CHAT_PATH_PREFIX)) return null;
-  return url.href;
+}
+
+/** referrer が chat 自身からの遷移か（今の URL と同じ origin で、path が chat で始まる）。 */
+function isSelfChatReferrer(referrerUrl: URL, currentUrl: string): boolean {
+  const current = parseHttpUrl(currentUrl);
+  return Boolean(current) && referrerUrl.origin === current!.origin && isChatPath(referrerUrl);
 }
 
 /**
@@ -95,15 +104,41 @@ export function entrySourceReturnHref(currentUrl: string, locale: Locale): strin
 }
 
 /**
- * 戻る先を 1 本に決める。引数は referrer・今の URL・言語で、画面の外（試験）からも渡せる。
- * (i) 許した host の referrer（chat 自身は除く）→ (ii) ?source= の page → (iii) サイトの top。
+ * 戻る先の決定と、storage に残す値を 1 つにまとめた物。
  */
-export function resolveReturnTarget(referrer: string | null | undefined, currentUrl: string, locale: Locale): string {
-  const referrerHref = allowedReferrerHref(referrer);
-  if (referrerHref) return referrerHref;
+export interface ReturnTargetDecision {
+  /** 戻る先として使う href。常に決まる。 */
+  href: string;
+  /** storage に残す値。残さない時は null。 */
+  save: string | null;
+}
+
+/**
+ * 戻る先を 1 本に決める。引数は referrer・今の URL・言語・残してある値で、
+ * 画面の外（試験）からも渡せる。storage への書き込みはここでは行わない（App の effect で行う）。
+ * 1. 許した host（https・一覧の host・chat 自身の path でない）の referrer → その URL を使い、
+ *    前に残した値を上書きして残す。
+ * 2. referrer が chat 自身（今の URL と同じ origin・path が /contact/chat で始まる）で、
+ *    残してある値が有効 → 残してある値を使う（mode の切り替えの後も同じ先）。
+ * 3. それ以外（referrer が無い・一覧に無い host）→ ?source= の page、無ければサイトの top。
+ *    この値は残さない（言語を切り替えたら top は言語に合わせて変わる）。残してある値も使わない。
+ */
+export function resolveReturnTarget(
+  referrer: string | null | undefined,
+  currentUrl: string,
+  locale: Locale,
+  stored: string | null | undefined,
+): ReturnTargetDecision {
+  const referrerUrl = parseHttpUrl(referrer);
+  if (referrerUrl && isAllowedReturnUrl(referrerUrl) && !isChatPath(referrerUrl)) {
+    return { href: referrerUrl.href, save: referrerUrl.href };
+  }
+  if (referrerUrl && isSelfChatReferrer(referrerUrl, currentUrl)) {
+    const validatedStored = validStoredReturnHref(stored);
+    if (validatedStored) return { href: validatedStored, save: null };
+  }
   const fromSource = entrySourceReturnHref(currentUrl, locale);
-  if (fromSource) return fromSource;
-  return SITE_TOP_PATHS[locale];
+  return { href: fromSource ?? SITE_TOP_PATHS[locale], save: null };
 }
 
 export const RETURN_TARGET_STORAGE_KEY = 'cloudia:return-target';
@@ -121,6 +156,16 @@ export function readStoredReturnTarget(storage: MinimalStorage | null): string |
   }
 }
 
+/**
+ * 残してある戻る先を読む時の検査（1 と同じ: https・一覧の host・chat 自身でない）。
+ * 通らない値（相対 path・http・一覧に無い host・chat 自身）は無い物として扱う。
+ */
+export function validStoredReturnHref(stored: string | null | undefined): string | null {
+  const url = parseHttpUrl(stored);
+  if (!url || !isAllowedReturnUrl(url) || isChatPath(url)) return null;
+  return url.href;
+}
+
 /** 戻る先を残す。storage が使えない環境では何もしない（chat は止めない）。 */
 export function saveReturnTarget(href: string, storage: MinimalStorage | null): void {
   if (!storage || !href.trim()) return;
@@ -129,4 +174,13 @@ export function saveReturnTarget(href: string, storage: MinimalStorage | null): 
   } catch {
     // Storage can be unavailable in privacy-restricted browser contexts.
   }
+}
+
+/**
+ * 決まった戻り先を storage へ反映する。App の effect（描画の外）から呼ぶ。
+ * save が決まっていない時（3 段目）は書かないので、前に残した値はそのまま残る。
+ */
+export function persistReturnTarget(decision: ReturnTargetDecision, storage: MinimalStorage | null): void {
+  if (!decision.save) return;
+  saveReturnTarget(decision.save, storage);
 }

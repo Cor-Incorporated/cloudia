@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { RETURN_TARGET_STORAGE_KEY, persistReturnTarget } from './utils/returnTarget';
 import { translations } from './translations';
 
 const INTRO_KEYS = [
@@ -91,6 +92,10 @@ describe('App header return link (outside the embed frame)', () => {
     const first = renderApp();
     expect(first).toContain('href="https://cor-jp.com/industries/medical/"');
 
+    // The write happens in a commit-phase effect, which static rendering does not run;
+    // persist the first page load's decision the same way App does.
+    persistReturnTarget({ href: 'https://cor-jp.com/industries/medical/', save: 'https://cor-jp.com/industries/medical/' }, shared);
+
     stubBrowser({ search: '', referrer: 'https://cor-jp.com/contact/chat/', storage: shared });
     const second = renderApp();
     expect(second).toContain('href="https://cor-jp.com/industries/medical/"');
@@ -162,5 +167,44 @@ describe('color alignment with the site', () => {
       const source = readFileSync(join(import.meta.dirname, file), 'utf8');
       expect(source, `${file} still has a blue class`).not.toMatch(/blue-\d/);
     }
+  });
+});
+
+describe('App header return link recomputation', () => {
+  it('recomputes the return target from the new entry instead of reusing the stored site top', () => {
+    const stale = memoryStorage();
+    stale.setItem(RETURN_TARGET_STORAGE_KEY, '/');
+    stubBrowser({ search: '?locale=en&source=industry-medical', storage: stale });
+    const markup = renderApp();
+
+    expect(markup).toContain('href="/en/industries/medical/"');
+    expect(markup).not.toContain('href="/"');
+  });
+});
+
+describe('header heading structure', () => {
+  it('keeps the h1 outside the return anchor and out of the wrapping span', () => {
+    stubBrowser({ search: '' });
+    const markup = renderApp();
+
+    const h1Index = markup.indexOf('<h1');
+    expect(h1Index).toBeGreaterThan(-1);
+
+    // 題の直前の開始 tag は div（span の中に h1 は置けない）。
+    expect(markup.slice(0, h1Index)).toMatch(/<div[^>]*>$/);
+    expect(markup.slice(0, h1Index)).not.toMatch(/<span[^>]*>$/);
+
+    // h1 はどの a の子孫でもない（link の aria-label が題を読み替えないように）。
+    for (const anchor of markup.matchAll(/<a\b[^>]*>[\s\S]*?<\/a>/g)) {
+      const start = anchor.index ?? 0;
+      expect(h1Index >= start && h1Index < start + anchor[0].length).toBe(false);
+    }
+  });
+});
+
+describe('font loading', () => {
+  it('does not preload fonts that no @font-face rule uses', () => {
+    const source = readFileSync(join(import.meta.dirname, 'index.html'), 'utf8');
+    expect(source).not.toContain('fonts.gstatic.com');
   });
 });

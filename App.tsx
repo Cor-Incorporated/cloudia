@@ -15,10 +15,10 @@ import { resolveAppMode } from './utils/appMode';
 import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget } from './utils/chatView';
 import {
   classifyReturnTarget,
+  persistReturnTarget,
   readStoredReturnTarget,
   resolveReturnTarget,
   RETURN_LINK_LABEL_KEYS,
-  saveReturnTarget,
 } from './utils/returnTarget';
 import { INTRO_BOOKING_NOTICE_VISIBLE } from './constants/introPanel';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
@@ -105,21 +105,24 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
 
   // 戻る先。同じ tab の間は、mode の切り替えや再読み込みの後も同じ先を使う
   // （chat の中の遷移で取り直さない）。embed（枠の中）では戻る link を出さない。
-  const returnHref = useMemo(() => {
+  // 決定は純関数（utils/returnTarget.ts）で行い、useMemo の中では storage に書かない。
+  const returnDecision = useMemo(() => {
     if (embedMode || typeof window === 'undefined') return null;
-    const storage = window.sessionStorage ?? null;
-    const stored = readStoredReturnTarget(storage);
-    if (stored) return stored;
-    const resolved = resolveReturnTarget(
+    return resolveReturnTarget(
       typeof document === 'undefined' ? null : document.referrer,
       window.location.href,
       locale,
+      readStoredReturnTarget(window.sessionStorage ?? null),
     );
-    saveReturnTarget(resolved, storage);
-    return resolved;
   }, [embedMode, locale]);
+  const returnHref = returnDecision?.href ?? null;
   const returnLabelKind = returnHref ? classifyReturnTarget(returnHref) : null;
   const returnLabelKey = returnLabelKind ? RETURN_LINK_LABEL_KEYS[returnLabelKind] : null;
+
+  useEffect(() => {
+    if (!returnDecision || typeof window === 'undefined') return;
+    persistReturnTarget(returnDecision, window.sessionStorage ?? null);
+  }, [returnDecision]);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -544,21 +547,25 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
     <div className={`${shellClass} flex-col`} data-embed={embedMode ? 'true' : 'false'}>
       {!embedMode && (
         <header id="app-header" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex-nowrap sm:px-5">
-          {returnHref && returnLabelKey && (
-            <a
-              href={returnHref}
-              aria-label={t(returnLabelKey)}
-              className="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
-            >
-              <ExpressionAvatar emotion={displayEmotion} size={48} compact className="shrink-0" />
-              <span className="min-w-0 block">
-                <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base">{t('title')}</h1>
-                {isContactChatMock() && appMode === 'intake' && (
-                  <p className="truncate text-xs text-amber-700">contact-chat MOCK</p>
-                )}
-              </span>
-            </a>
-          )}
+          {/* 絵（avatar）だけが戻る先の link。題（h1）と MOCK の表示は link の外に置く
+              （span の中に h1 は置けず、link の aria-label が題を読み替えてしまうため）。 */}
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {returnHref && returnLabelKey && (
+              <a
+                href={returnHref}
+                aria-label={t(returnLabelKey)}
+                className="shrink-0 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+              >
+                <ExpressionAvatar emotion={displayEmotion} size={48} compact />
+              </a>
+            )}
+            <div className="min-w-0">
+              <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base">{t('title')}</h1>
+              {isContactChatMock() && appMode === 'intake' && (
+                <p className="truncate text-xs text-amber-700">contact-chat MOCK</p>
+              )}
+            </div>
+          </div>
           <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
             {returnHref && returnLabelKey && (
               <a
