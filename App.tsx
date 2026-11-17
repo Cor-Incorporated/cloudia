@@ -562,7 +562,17 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
               )}
             </div>
           </div>
-          <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
+          {/*
+            右の塊は 2 つの組に分ける。DOM の順は「link の組 → 言語の組」で
+            読み上げと tab の順を今のまま保ち、見た目の並びは order-* で組む。
+            狭い画面（640px 未満）: 1 段目 = 題（伸びる）+ 言語の組（縮まない）／
+            2 段目 = link の組（幅いっぱい・右寄せ・中の折り返しは許す）。
+            広い画面（sm 以上）: 今と同じ 1 段（題 → link の組 → 言語の組）。
+          */}
+          <div
+            data-testid="header-links"
+            className="order-3 flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:order-2 sm:w-auto"
+          >
             {returnHref && returnLabelKey && (
               <a
                 href={returnHref}
@@ -586,6 +596,11 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
             >
               {t(appMode === 'ambassador' ? 'intakeLink' : 'ambassadorLink')}
             </a>
+          </div>
+          <div
+            data-testid="header-languages"
+            className="order-2 flex shrink-0 items-center gap-2 sm:order-3"
+          >
             <button
               type="button"
               onClick={() => setLocale('en')}

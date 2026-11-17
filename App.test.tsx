@@ -114,6 +114,66 @@ describe('App header return link (outside the embed frame)', () => {
   });
 });
 
+describe('App header grouping on narrow screens', () => {
+  function renderHeader(search = ''): string {
+    stubBrowser({ search });
+    const markup = renderApp();
+    const headerStart = markup.indexOf('<header id="app-header"');
+    expect(headerStart, 'header is rendered').toBeGreaterThan(-1);
+    return markup.slice(headerStart, markup.indexOf('</header>', headerStart));
+  }
+
+  it('renders both the header-links group and the header-languages group outside the embed frame', () => {
+    const header = renderHeader();
+
+    expect(header).toContain('data-testid="header-links"');
+    expect(header).toContain('data-testid="header-languages"');
+  });
+
+  it('keeps the two language buttons inside header-languages and out of header-links', () => {
+    const header = renderHeader();
+    const linksStart = header.indexOf('data-testid="header-links"');
+    const languagesStart = header.indexOf('data-testid="header-languages"');
+
+    const linksGroup = header.slice(linksStart, languagesStart);
+    const languagesGroup = header.slice(languagesStart);
+
+    expect(languagesGroup).toMatch(/<button[^>]*>English<\/button>/);
+    expect(languagesGroup).toMatch(/<button[^>]*>日本語<\/button>/);
+    expect(linksGroup).not.toContain('>English<');
+    expect(linksGroup).not.toContain('>日本語<');
+  });
+
+  it('keeps the return link and the mode link inside header-links', () => {
+    const header = renderHeader();
+    const linksStart = header.indexOf('data-testid="header-links"');
+    const languagesStart = header.indexOf('data-testid="header-languages"');
+
+    const linksGroup = header.slice(linksStart, languagesStart);
+
+    expect(linksGroup).toContain('href="/"');
+    expect(linksGroup).toContain('Cor. のサイトに戻る');
+    expect(linksGroup).toContain('href="/contact/chat/ambassador/"');
+  });
+
+  it('places the links group before the languages group in DOM order', () => {
+    const header = renderHeader();
+    const linksStart = header.indexOf('data-testid="header-links"');
+    const languagesStart = header.indexOf('data-testid="header-languages"');
+
+    expect(linksStart).toBeGreaterThan(-1);
+    expect(languagesStart).toBeGreaterThan(linksStart);
+  });
+
+  it('hides both groups inside the embed frame', () => {
+    stubBrowser({ search: '?embed=1' });
+    const markup = renderApp();
+
+    expect(markup).not.toContain('header-links');
+    expect(markup).not.toContain('header-languages');
+  });
+});
+
 describe('App embed mode', () => {
   it('hides the header and the return link inside the embed frame, but still shows the intro panel', () => {
     stubBrowser({ search: '?embed=1' });
