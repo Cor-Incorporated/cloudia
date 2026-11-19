@@ -6,13 +6,15 @@ import ExpressionAvatar from './components/ExpressionAvatar';
 import IntentPicker from './components/IntentPicker';
 import PiiNotice from './components/PiiNotice';
 import IntroPanel from './components/IntroPanel';
+import SiteHeader from './components/SiteHeader';
+import SiteFooterBar from './components/SiteFooterBar';
 import HandoffForm, { HandoffValues } from './components/HandoffForm';
 import FallbackNotice from './components/FallbackNotice';
 import FaqResolutionPrompt from './components/FaqResolutionPrompt';
 import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
-import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget } from './utils/chatView';
+import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget, showNewConversation } from './utils/chatView';
 import {
   classifyReturnTarget,
   persistReturnTarget,
@@ -547,76 +549,14 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
   return (
     <div className={`${shellClass} flex-col`} data-embed={embedMode ? 'true' : 'false'}>
       {!embedMode && (
-        <header id="app-header" className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:flex-nowrap sm:px-5">
-          {/* 絵（avatar）は link にしない。戻る link は文字の 1 本だけにして、
-              読み上げと tab の止まる所を増やさない。題（h1）は link の外に置く
-              （span の中に h1 は置けないため）。 */}
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            {returnHref && returnLabelKey && (
-              <ExpressionAvatar emotion={displayEmotion} size={48} compact />
-            )}
-            <div className="min-w-0">
-              <h1 className="leading-tight text-sm font-semibold text-slate-900 sm:truncate sm:text-base">{t('title')}</h1>
-              {isContactChatMock() && appMode === 'intake' && (
-                <p className="truncate text-xs text-amber-700">contact-chat MOCK</p>
-              )}
-            </div>
-          </div>
-          {/*
-            右の塊は 2 つの組に分ける。DOM の順は「link の組 → 言語の組」で
-            読み上げと tab の順を今のまま保ち、見た目の並びは order-* で組む。
-            狭い画面（640px 未満）: 1 段目 = 題（伸びる）+ 言語の組（縮まない）／
-            2 段目 = link の組（幅いっぱい・右寄せ・中の折り返しは許す）。
-            広い画面（sm 以上）: 今と同じ 1 段（題 → link の組 → 言語の組）。
-          */}
-          <div
-            data-testid="header-links"
-            className="order-3 flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:order-2 sm:w-auto"
-          >
-            {returnHref && returnLabelKey && (
-              <a
-                href={returnHref}
-                className="min-h-11 px-1 py-3 text-xs font-medium text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy sm:text-sm"
-              >
-                {t(returnLabelKey)}
-              </a>
-            )}
-            {(selectedIntent || messages.length > 1 || submitted) && (
-              <button
-                type="button"
-                onClick={handleStartNewConversation}
-                className="min-h-11 px-1 text-xs font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy sm:text-sm"
-              >
-                {t('newConversation')}
-              </button>
-            )}
-            <a
-              href={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
-              className="min-h-11 px-1 py-3 text-xs font-medium text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy sm:text-sm"
-            >
-              {t(appMode === 'ambassador' ? 'intakeLink' : 'ambassadorLink')}
-            </a>
-          </div>
-          <div
-            data-testid="header-languages"
-            className="order-2 flex shrink-0 items-center gap-2 sm:order-3"
-          >
-            <button
-              type="button"
-              onClick={() => setLocale('en')}
-              className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy ${locale === 'en' ? 'bg-navy text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              English
-            </button>
-            <button
-              type="button"
-              onClick={() => setLocale('ja')}
-              className={`min-h-11 rounded-lg px-3 py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy ${locale === 'ja' ? 'bg-navy text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-            >
-              日本語
-            </button>
-          </div>
-        </header>
+        <SiteHeader
+          emotion={displayEmotion}
+          returnHref={returnHref}
+          returnLabel={returnHref && returnLabelKey ? t(returnLabelKey) : null}
+          locale={locale}
+          onSelectLocale={setLocale}
+          showMockBadge={isContactChatMock() && appMode === 'intake'}
+        />
       )}
 
       {embedMode && (
@@ -630,6 +570,21 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
         <section
           className={`mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col bg-white shadow-sm ${showHandoff ? 'overflow-y-auto' : 'overflow-hidden'}`}
         >
+          {showNewConversation({ selectedIntent, messageCount: messages.length, submitted }) && (
+            <div
+              data-testid="conversation-actions"
+              className="flex min-h-11 shrink-0 items-center justify-end px-3 pt-1"
+            >
+              <button
+                type="button"
+                onClick={handleStartNewConversation}
+                className="min-h-11 text-xs font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+              >
+                {t('newConversation')}
+              </button>
+            </div>
+          )}
+
           <FallbackNotice
             visible={apiDegraded}
             onRetry={
@@ -810,6 +765,8 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
           )}
         </section>
       </main>
+
+      {!embedMode && <SiteFooterBar currentSite="cloudia" />}
     </div>
   );
 };
