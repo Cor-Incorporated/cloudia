@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget } from './chatView';
+import {
+  chatPlaceholderKey,
+  handoffSuccessMessage,
+  messageListScrollTarget,
+  showNewConversation,
+} from './chatView';
 
 describe('messageListScrollTarget', () => {
   it('keeps the greeting visible while it is the only message', () => {
@@ -42,5 +47,25 @@ describe('handoffSuccessMessage', () => {
   it('falls back to the plain message without a receipt number', () => {
     expect(handoffSuccessMessage(undefined)).toEqual({ textKey: 'handoffSuccess' });
     expect(handoffSuccessMessage('')).toEqual({ textKey: 'handoffSuccess' });
+  });
+});
+
+describe('showNewConversation', () => {
+  it('shows on each of the three sides alone', () => {
+    expect(showNewConversation({ selectedIntent: 'local-llm-poc', messageCount: 1, submitted: false })).toBe(true);
+    expect(showNewConversation({ selectedIntent: null, messageCount: 2, submitted: false })).toBe(true);
+    expect(showNewConversation({ selectedIntent: null, messageCount: 1, submitted: true })).toBe(true);
+  });
+
+  it('hides when all three sides are false', () => {
+    expect(showNewConversation({ selectedIntent: null, messageCount: 1, submitted: false })).toBe(false);
+    expect(showNewConversation({ selectedIntent: null, messageCount: 0, submitted: false })).toBe(false);
+  });
+
+  it('shows when any two sides are true', () => {
+    expect(showNewConversation({ selectedIntent: 'local-llm-poc', messageCount: 2, submitted: false })).toBe(true);
+    expect(showNewConversation({ selectedIntent: 'local-llm-poc', messageCount: 1, submitted: true })).toBe(true);
+    expect(showNewConversation({ selectedIntent: null, messageCount: 2, submitted: true })).toBe(true);
+    expect(showNewConversation({ selectedIntent: 'local-llm-poc', messageCount: 2, submitted: true })).toBe(true);
   });
 });
