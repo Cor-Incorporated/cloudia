@@ -1,0 +1,3 @@
+# Cloudflare Pages が既定で付ける Access-Control-Allow-Origin: * を、すべての path で取り外す。
+/*
+  ! Access-Control-Allow-Origin
