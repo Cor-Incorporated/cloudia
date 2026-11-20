@@ -30,6 +30,18 @@ export function chatPlaceholderKey(
 }
 
 /**
+ * 「新しい相談」を出すか。意図を選んだ・会話が進んだ・送信済みのどれか。
+ * 3 辺はそれぞれ単独で真になる。
+ */
+export function showNewConversation(input: {
+  selectedIntent: unknown;
+  messageCount: number;
+  submitted: boolean;
+}): boolean {
+  return Boolean(input.selectedIntent) || input.messageCount > 1 || input.submitted;
+}
+
+/**
  * Success message after /api/contact/submit. The Worker emails a receipt with
  * the same number, so only promise that email when a receipt number came back.
  */

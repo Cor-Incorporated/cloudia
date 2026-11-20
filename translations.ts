@@ -78,6 +78,9 @@ export const translations = {
     faqResolvedYes: "Yes, I'm all set",
     faqResolvedNo: "No, continue the conversation",
     faqResolvedThanks: "Glad that helped. You can start a new inquiry anytime if you need more assistance.",
+    languageMenuLabel: "Change language",
+    commonLinksLabel: "Common links",
+    sitesLabel: "Sites",
   },
   ja: {
     title: "Cloudia — Cor. AI受付",
@@ -159,6 +162,9 @@ export const translations = {
     faqResolvedYes: "はい、解決しました",
     faqResolvedNo: "いいえ、相談を続ける",
     faqResolvedThanks: "お役に立ててよかったです。追加のご相談は、いつでも新しい相談からお始めください。",
+    languageMenuLabel: "言語を切り替え",
+    commonLinksLabel: "共通リンク",
+    sitesLabel: "サイト切替",
   },
 };
 

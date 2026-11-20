@@ -75,8 +75,9 @@ describe('App header return link (outside the embed frame)', () => {
 
     expect(markup).toContain('href="/"');
     expect(markup).toContain('Cor. のサイトに戻る');
-    // 戻る link は文字の 1 本だけ（絵は link にしない）。
-    expect(markup.match(/Cor\. のサイトに戻る/g)).toHaveLength(1);
+    // 戻る link の文字の 1 本だけ（絵は link にしない）。省略に備えて title にも同じ全文を置く。
+    expect(markup.match(/>Cor\. のサイトに戻る<\/span>/g)).toHaveLength(1);
+    expect(markup).toContain('title="Cor. のサイトに戻る"');
   });
 
   it('points to the English site top when the UI language is English', () => {
@@ -100,7 +101,8 @@ describe('App header return link (outside the embed frame)', () => {
     stubBrowser({ search: '', referrer: 'https://cor-jp.com/contact/chat/', storage: shared });
     const second = renderApp();
     expect(second).toContain('href="https://cor-jp.com/industries/medical/"');
-    expect(second).not.toContain('href="https://cor-jp.com/contact/chat/"');
+    const header = second.slice(second.indexOf('<header id="app-header"'), second.indexOf('</header>'));
+    expect(header).not.toContain('href="https://cor-jp.com/contact/chat/"');
   });
 
   it('renders one return link in the header and leaves the avatar out of the link', () => {
@@ -114,7 +116,7 @@ describe('App header return link (outside the embed frame)', () => {
   });
 });
 
-describe('App header grouping on narrow screens', () => {
+describe('App header (one row, common shape)', () => {
   function renderHeader(search = ''): string {
     stubBrowser({ search });
     const markup = renderApp();
@@ -133,87 +135,138 @@ describe('App header grouping on narrow screens', () => {
     return classAttribute![1];
   }
 
-  it('renders both the header-links group and the header-languages group outside the embed frame', () => {
+  it('pins a sticky 56px / 64px one-row header with the common colors', () => {
     const header = renderHeader();
+    const classes = openingTagClass(header, '<header id="app-header"').split(/\s+/);
 
-    expect(header).toContain('data-testid="header-links"');
-    expect(header).toContain('data-testid="header-languages"');
+    expect(classes).toContain('sticky');
+    expect(classes).toContain('top-0');
+    expect(classes).toContain('h-14');
+    expect(classes).toContain('lg:h-16');
+    expect(classes).toContain('bg-stone-50');
+    expect(classes).toContain('border-stone-200');
+    expect(classes).toContain('px-3');
+    expect(classes).toContain('lg:px-6');
   });
 
-  it('keeps the two language buttons inside header-languages and out of header-links', () => {
+  it('renders exactly one return link with a 44px tap target and 14px text', () => {
     const header = renderHeader();
-    const linksStart = header.indexOf('data-testid="header-links"');
-    const languagesStart = header.indexOf('data-testid="header-languages"');
+    const anchors = header.match(/<a\b/g) ?? [];
+    expect(anchors).toHaveLength(1);
 
-    const linksGroup = header.slice(linksStart, languagesStart);
-    const languagesGroup = header.slice(languagesStart);
-
-    expect(languagesGroup).toMatch(/<button[^>]*>English<\/button>/);
-    expect(languagesGroup).toMatch(/<button[^>]*>日本語<\/button>/);
-    expect(linksGroup).not.toContain('>English<');
-    expect(linksGroup).not.toContain('>日本語<');
+    const classes = openingTagClass(header, 'data-testid="header-return"').split(/\s+/);
+    expect(classes).toContain('min-h-11');
+    expect(classes).toContain('min-w-11');
+    expect(classes).toContain('text-sm');
+    expect(classes).toContain('rounded-full');
   });
 
-  it('keeps the return link and the mode link inside header-links', () => {
-    const header = renderHeader();
-    const linksStart = header.indexOf('data-testid="header-links"');
-    const languagesStart = header.indexOf('data-testid="header-languages"');
-
-    const linksGroup = header.slice(linksStart, languagesStart);
-
-    expect(linksGroup).toContain('href="/"');
-    expect(linksGroup).toContain('Cor. のサイトに戻る');
-    expect(linksGroup).toContain('href="/contact/chat/ambassador/"');
-  });
-
-  it('places the links group before the languages group in DOM order', () => {
-    const header = renderHeader();
-    const linksStart = header.indexOf('data-testid="header-links"');
-    const languagesStart = header.indexOf('data-testid="header-languages"');
-
-    expect(linksStart).toBeGreaterThan(-1);
-    expect(languagesStart).toBeGreaterThan(linksStart);
-  });
-
-  it('pins the ordering classes on the header-links group', () => {
-    const header = renderHeader();
-    const classes = openingTagClass(header, 'data-testid="header-links"').split(/\s+/);
-
-    expect(classes).toContain('order-3');
-    expect(classes).toContain('sm:order-2');
-    expect(classes).toContain('w-full');
-    expect(classes).toContain('sm:w-auto');
-  });
-
-  it('pins the ordering classes on the header-languages group', () => {
-    const header = renderHeader();
-    const classes = openingTagClass(header, 'data-testid="header-languages"').split(/\s+/);
-
-    expect(classes).toContain('order-2');
-    expect(classes).toContain('sm:order-3');
-    expect(classes).toContain('shrink-0');
-  });
-
-  it('lets the header title wrap on narrow screens and truncates only on wider screens', () => {
+  it('keeps the title in the DOM and hides it visually below 1024px', () => {
     const header = renderHeader();
     const h1Start = header.indexOf('<h1');
     expect(h1Start, 'the header title is rendered').toBeGreaterThan(-1);
-    const tag = header.slice(h1Start, header.indexOf('>', h1Start) + 1);
-    const classAttribute = tag.match(/class="([^"]*)"/);
-    expect(classAttribute, 'the header title has a class attribute').not.toBeNull();
-    const classes = classAttribute![1].split(/\s+/);
+    const classes = openingTagClass(header, '<h1').split(/\s+/);
 
-    expect(classes).toContain('sm:truncate');
-    expect(classes).not.toContain('truncate');
-    expect(classes).toContain('leading-tight');
+    expect(classes).toContain('sr-only');
+    expect(classes).toContain('lg:not-sr-only');
+    expect(classes).toContain('text-base');
+    expect(classes).toContain('font-semibold');
+    expect(header).toContain(translations.ja.title);
   });
 
-  it('hides both groups inside the embed frame', () => {
+  it('renders the logo outside any link', () => {
+    const header = renderHeader();
+
+    expect(header).toContain('data-testid="header-avatar"');
+    expect(header).toMatch(/role="img"/);
+    // 絵は link にしない。header の中の link は戻る 1 本だけ。
+    expect(header.match(/<a\b/g) ?? []).toHaveLength(1);
+    expect(header).not.toMatch(/<a\b[^>]*>[\s\S]*role="img"/);
+  });
+
+  it('keeps the language switch inside header-languages and out of the return link', () => {
+    const header = renderHeader();
+    const languagesStart = header.indexOf('data-testid="header-languages"');
+    expect(languagesStart).toBeGreaterThan(-1);
+
+    const languagesGroup = header.slice(languagesStart);
+    expect(languagesGroup).toMatch(/<button[^>]*>English<\/button>/);
+    expect(languagesGroup).toMatch(/<button[^>]*>日本語<\/button>/);
+    expect(languagesGroup).toContain('aria-pressed="true"');
+    expect(languagesGroup).toContain('aria-pressed="false"');
+    const desktopClasses = (languagesGroup.match(/data-testid="header-languages" class="([^"]*)"/)?.[1] ?? '').split(/\s+/);
+    expect(desktopClasses).toContain('hidden');
+    expect(desktopClasses).toContain('lg:block');
+    expect(languagesGroup).toContain('lg:hidden');
+  });
+
+  it('has no mode link and no new-conversation button in the header', () => {
+    const header = renderHeader('?intent=local-llm-poc');
+
+    expect(header).not.toContain('Cloudiaと雑談する');
+    expect(header).not.toContain('相談の受付へ戻る');
+    expect(header).not.toContain('新しい相談');
+    expect(header).not.toContain('href="/contact/chat/ambassador/"');
+  });
+
+  it('hides the header inside the embed frame', () => {
     stubBrowser({ search: '?embed=1' });
     const markup = renderApp();
 
-    expect(markup).not.toContain('header-links');
     expect(markup).not.toContain('header-languages');
+    expect(markup).not.toContain('app-header');
+  });
+});
+
+describe('App new-conversation action', () => {
+  it('sits at the top of the conversation section and not in the header', () => {
+    stubBrowser({ search: '?intent=local-llm-poc' });
+    const markup = renderApp();
+
+    const sectionStart = markup.indexOf('<section');
+    const actionsStart = markup.indexOf('data-testid="conversation-actions"');
+    const logStart = markup.indexOf('role="log"');
+    expect(actionsStart).toBeGreaterThan(sectionStart);
+    expect(actionsStart).toBeLessThan(logStart);
+    expect(markup).toContain('新しい相談');
+
+    const headerStart = markup.indexOf('<header id="app-header"');
+    const header = markup.slice(headerStart, markup.indexOf('</header>', headerStart));
+    expect(header).not.toContain('新しい相談');
+  });
+
+  it('is absent until an intent is chosen', () => {
+    stubBrowser({ search: '' });
+    const markup = renderApp();
+
+    expect(markup).not.toContain('conversation-actions');
+  });
+
+  it('uses the existing condition (selected intent, more than one message, or submitted)', () => {
+    stubBrowser({ search: '?intent=local-llm-poc' });
+    expect(renderApp()).toContain('conversation-actions');
+  });
+});
+
+describe('App footer bar', () => {
+  it('renders the footer landmark outside main and after it', () => {
+    stubBrowser({ search: '' });
+    const markup = renderApp();
+
+    const mainEnd = markup.indexOf('</main>');
+    const footerStart = markup.indexOf('<footer');
+    expect(footerStart).toBeGreaterThan(mainEnd);
+    expect(markup).toContain('data-testid="site-footer"');
+    expect(markup).toContain('aria-label="共通リンク"');
+    expect(markup).toContain('aria-label="サイト切替"');
+  });
+
+  it('hides the footer inside the embed frame', () => {
+    stubBrowser({ search: '?embed=1' });
+    const markup = renderApp();
+
+    expect(markup).not.toContain('<footer');
+    expect(markup).not.toContain('data-testid="site-footer"');
   });
 });
 
