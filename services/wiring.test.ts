@@ -16,7 +16,10 @@ afterEach(() => {
 
 describe('index.tsx', () => {
   it('starts analytics exactly once, at module level, before React renders', async () => {
-    const startAnalytics = vi.fn();
+    const location = { search: '?source=industry-medical&locale=es' };
+    const startAnalytics = vi.fn(() => {
+      location.search = '?source=industry-medical';
+    });
     const render = vi.fn();
     vi.resetModules();
     vi.doMock('../services/analytics', () => ({ startAnalytics }));
@@ -24,11 +27,16 @@ describe('index.tsx', () => {
     vi.doMock('../App', () => ({ default: () => null }));
     vi.doMock('../contexts/LanguageContext', () => ({ LanguageProvider: ({ children }: { children: unknown }) => children }));
     vi.stubGlobal('document', { getElementById: () => ({}) });
+    vi.stubGlobal('window', { location });
 
     await import('../index');
 
     expect(startAnalytics).toHaveBeenCalledTimes(1);
-    expect(render).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      props: expect.objectContaining({
+        children: expect.objectContaining({ props: expect.objectContaining({ initialLocale: 'en' }) }),
+      }),
+    }));
     expect(startAnalytics.mock.invocationCallOrder[0]).toBeLessThan(render.mock.invocationCallOrder[0]);
   });
 });

@@ -4,7 +4,10 @@ import './index.css';
 import App from './App';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { startAnalytics } from './services/analytics';
+import { industryEntryLocale } from './utils/contactLocale';
 
+// Read the industry page's language before analytics removes unsupported locales.
+const initialLocale = industryEntryLocale(window.location.search);
 // Once per page view, outside React, so StrictMode's double invocation cannot repeat it.
 startAnalytics();
 
@@ -16,7 +19,7 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <LanguageProvider>
+    <LanguageProvider initialLocale={initialLocale}>
       <App />
     </LanguageProvider>
   </React.StrictMode>

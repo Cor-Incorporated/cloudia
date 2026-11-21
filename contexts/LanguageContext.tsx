@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
+import { createContext, useState, useContext, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { translations, Locale } from '../translations';
 import { resolveUiLocale } from '../utils/contactLocale';
 
@@ -10,24 +10,33 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider = ({ children }: { children: ReactNode }) => {
+export const LanguageProvider = ({
+  children,
+  initialLocale,
+}: {
+  children: ReactNode;
+  initialLocale?: Locale | null;
+}) => {
+  const entryLocale = useRef(initialLocale).current;
   // Attempt to get language from localStorage or default to browser language or 'en'
   const getInitialLocale = (): Locale => {
-    return resolveUiLocale({
+    return entryLocale ?? resolveUiLocale({
       query: new URLSearchParams(window.location.search).get('locale'),
       stored: localStorage.getItem('app-locale'),
       browserLanguage: navigator.language,
     });
   };
 
-  const [locale, setLocaleState] = useState<Locale>(getInitialLocale());
+  const [locale, setLocaleState] = useState<Locale>(getInitialLocale);
 
   useEffect(() => {
-    localStorage.setItem('app-locale', locale);
-  }, [locale]);
+    // The industry entry can choose this page's language without changing the stored preference.
+    if (entryLocale == null) localStorage.setItem('app-locale', locale);
+  }, [entryLocale, locale]);
 
   const setLocale = (newLocale: Locale) => {
     setLocaleState(newLocale);
+    if (entryLocale != null) localStorage.setItem('app-locale', newLocale);
   };
 
   const t = useCallback((key: keyof typeof translations.en, replacements?: Record<string, string>): string => {
