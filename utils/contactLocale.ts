@@ -1,4 +1,5 @@
 import type { Locale } from '../translations';
+import { isIndustryEntrySource, parseEntrySourceFromSearch } from '../constants/entrySources';
 
 /** Cloudia contact UI languages. zh, ko, and es are not in this list. */
 export const CONTACT_LOCALES = ['ja', 'en'] as const;
@@ -14,6 +15,14 @@ export function isContactLocale(value: unknown): value is Locale {
  */
 export function contactCopyLocale(raw: unknown): Locale {
   return raw === 'ja' ? 'ja' : 'en';
+}
+
+/** The industry pages in zh, ko, and es start the two-language reception in English. */
+export function industryEntryLocale(search: string): Locale | null {
+  if (!isIndustryEntrySource(parseEntrySourceFromSearch(search))) return null;
+  const [locale, duplicate] = new URLSearchParams(search).getAll('locale');
+  if (duplicate !== undefined) return null;
+  return locale === 'zh' || locale === 'ko' || locale === 'es' ? 'en' : null;
 }
 
 /**

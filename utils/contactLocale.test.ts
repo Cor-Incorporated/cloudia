@@ -4,7 +4,7 @@ import { industryContextLine, industryLabel } from '../constants/industryGuidanc
 import { CONTACT_INTENT_DISPLAY_OPTIONS, getIntentDisplayLabel } from '../constants/intents';
 import { translations, type Locale } from '../translations';
 import { showDirectHandoff, type InquiryPathInput } from './inquiryPath';
-import { CONTACT_LOCALES, resolveUiLocale } from './contactLocale';
+import { CONTACT_LOCALES, industryEntryLocale, resolveUiLocale } from './contactLocale';
 
 const UNSUPPORTED = ['zh', 'ko', 'es', 'zh-CN', 'ko-KR', 'es-ES', 'en-US', 'fr', ''] as const;
 
@@ -98,5 +98,28 @@ describe('resolveUiLocale with a stored value', () => {
   it.each(['zh', 'ko', 'es', 'en-US', 'fr', ''])('ignores a stored %j that is not a language of this UI', (stored) => {
     expect(resolveUiLocale({ query: null, stored, browserLanguage: null })).toBe('en');
     expect(resolveUiLocale({ query: null, stored, browserLanguage: 'ja-JP' })).toBe('ja');
+  });
+});
+
+describe('industry reception locale before URL sanitization', () => {
+  it.each(INDUSTRY_ENTRY_SOURCES)('uses English for zh/ko/es on %s', (source) => {
+    for (const locale of ['zh', 'ko', 'es']) {
+      const search = `?locale=${locale}&source=${source}`;
+      expect(industryEntryLocale(search)).toBe('en');
+      expect(industryEntryLocale(search + '&embed=1')).toBe('en');
+    }
+  });
+
+  it.each([
+    '?source=industry-medical&locale=ja',
+    '?source=industry-medical&locale=en',
+    '?source=industry-medical&locale=zh-CN',
+    '?source=industry-medical&locale=ko&locale=ja',
+    '?source=industry-medical&source=industry-shigyo&locale=zh',
+    '?source=corsweb-launcher&locale=es',
+    '?source=unrecognized&locale=zh',
+    '?locale=es',
+  ])('lets normal locale resolution handle %s', (search) => {
+    expect(industryEntryLocale(search)).toBeNull();
   });
 });
