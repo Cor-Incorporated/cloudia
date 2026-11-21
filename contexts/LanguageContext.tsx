@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, ReactNode, useCallback, useEffect, useRef } from 'react';
+import { createContext, useState, useContext, ReactNode, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { translations, Locale } from '../translations';
 import { resolveUiLocale } from '../utils/contactLocale';
 
@@ -28,6 +28,10 @@ export const LanguageProvider = ({
   };
 
   const [locale, setLocaleState] = useState<Locale>(getInitialLocale);
+
+  useLayoutEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   useEffect(() => {
     // The industry entry can choose this page's language without changing the stored preference.
