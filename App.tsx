@@ -366,7 +366,7 @@ const App: React.FC = () => {
   const handleSendMessage = useCallback(async (inputText: string, retrying = false) => {
     if (!inputText.trim() || submitted) return;
 
-    if (appMode === 'intake' && (!selectedIntent || !chatReady)) return;
+    if (requestAbortRef.current) return;
 
     const newUserMessage: Message = { id: uuidv4(), text: inputText, sender: 'user' };
     const nextMessages = retrying ? messages : [...messages, newUserMessage];
@@ -393,6 +393,7 @@ const App: React.FC = () => {
       if (result.structuredLead) setStructuredLead(result.structuredLead);
       setLastFailedInput(null);
       setApiDegraded(false);
+      if (appMode === 'intake') setIntentStartState('started');
       setClassification(result.classification);
       if (result.readyForContact) {
         setReadyForContact(true);
@@ -416,7 +417,7 @@ const App: React.FC = () => {
     } finally {
       finishRequest(controller);
     }
-  }, [applyFaqResolutionFromResult, beginRequest, chatReady, entrySource, finishRequest, messages, locale, appMode, selectedIntent, submitted, sessionId]);
+  }, [applyFaqResolutionFromResult, beginRequest, entrySource, finishRequest, messages, locale, appMode, selectedIntent, submitted, sessionId]);
 
   const handleRetryChat = useCallback(() => {
     if (lastFailedInput) void handleSendMessage(lastFailedInput, true);
@@ -475,19 +476,33 @@ const App: React.FC = () => {
   }, [appMode, handleStopRequest, locale, messages.length, selectedIntent, submitted, t]);
 
   const handleHandoff = useCallback(async (values: HandoffValues) => {
-    if (submitLockRef.current || submitted) return;
+    if (submitLockRef.current || submitted || !values.message.trim()) return;
     submitLockRef.current = true;
     setHandoffFailed(false);
     const controller = beginRequest('submit');
-    const handoffMessage = values.message.trim() || conversationSummary.trim() || t('handoffDefaultMessage');
     try {
+      let submissionSessionId = sessionId;
+      // The Worker derives the industry from its stored session when it accepts an inquiry.
+      if (!submissionSessionId && industryName && !isContactChatMock()) {
+        const started = await postContactChatStart([], {
+          mode: appMode,
+          locale,
+          intent: selectedIntent,
+          sessionId: null,
+          entrySource,
+        }, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (!started.sessionId) throw new Error('Contact session was not created');
+        submissionSessionId = started.sessionId;
+        setSessionId(submissionSessionId);
+      }
       const submitResult = await submitContactInquiry({
-        sessionId,
+        sessionId: submissionSessionId,
         idempotencyKey: idempotencyKeyRef.current,
         name: values.name,
         email: values.email,
         company: values.company,
-        message: handoffMessage,
+        message: values.message.trim(),
         summaryText: conversationSummary,
         structuredLead,
         classification,
@@ -515,7 +530,7 @@ const App: React.FC = () => {
       submitLockRef.current = false;
       finishRequest(controller);
     }
-  }, [beginRequest, conversationSummary, entrySource, finishRequest, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
+  }, [appMode, beginRequest, conversationSummary, entrySource, finishRequest, industryName, locale, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
 
   const displayEmotion = isLoading ? Emotion.THINKING : currentEmotion;
   const pathInput = {
@@ -528,11 +543,20 @@ const App: React.FC = () => {
     classification,
   };
   const readyHandoffVisible = showReadyHandoff(pathInput);
-  const directHandoffVisible = showDirectHandoff(pathInput) && (Boolean(industryQuestionText) || apiDegraded);
+  const directHandoffVisible = showDirectHandoff(pathInput) && (Boolean(industryQuestionText) || messages.length > 1 || apiDegraded);
+  const openHandoff = () => {
+    const lastUserMessage = messages.slice().reverse().find((message) => message.sender === 'user');
+    setHandoffDraft((draft) => ({
+      ...draft,
+      message: draft.message || (readyForContact ? conversationSummary : '') || lastUserMessage?.text || '',
+    }));
+    setShowHandoff(true);
+  };
   const thread = displayThread(messages, {
     openingText: industryQuestionText,
     dropOpening: intentStartState === 'started' && historyHasIndustryReception(messages, entrySource, locale),
   });
+  const showOpeningPrivacy = thread[0]?.id === messages[0]?.id;
   const shellClass = embedMode
     ? 'flex h-dvh min-h-0 w-full overflow-hidden bg-white text-slate-900'
     : 'flex h-dvh min-h-dvh overflow-hidden bg-white text-slate-900';
@@ -610,17 +634,19 @@ const App: React.FC = () => {
                 ) : (
                   <ChatMessage message={msg} plainText />
                 )}
-                {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState !== 'started' && (
+                {appMode === 'intake' && index === 0 && msg.id === messages[0]?.id && (
                   <div className="mt-2 max-w-2xl space-y-3">
                     <div id="cloudia-pii-note">
                       <PiiNotice note={industryBoundaryText ?? undefined} />
                     </div>
-                    <IntentPicker
-                      selected={selectedIntent}
-                      onSelect={handleSelectIntent}
-                      disabled={isLoading || submitted || intentStartState === 'starting'}
-                      describedBy="cloudia-pii-note"
-                    />
+                    {messages.length === 1 && (
+                      <IntentPicker
+                        selected={selectedIntent}
+                        onSelect={handleSelectIntent}
+                        disabled={isLoading || submitted || intentStartState === 'starting'}
+                        describedBy="cloudia-pii-note"
+                      />
+                    )}
                   </div>
                 )}
                 {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState === 'started' && selectedIntent && (
@@ -664,7 +690,7 @@ const App: React.FC = () => {
                   ref={handoffEntryRef}
                   type="button"
                   className="min-h-11 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
-                  onClick={() => setShowHandoff(true)}
+                  onClick={openHandoff}
                 >
                   {t('showHandoff')}
                 </button>
@@ -735,11 +761,11 @@ const App: React.FC = () => {
               <button
                 ref={handoffEntryRef}
                 type="button"
-                onClick={() => setShowHandoff(true)}
+                onClick={openHandoff}
                 disabled={isLoading}
                 className="min-h-11 text-left text-sm font-medium text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:text-slate-400"
               >
-                {t('skipChatHandoff')}
+                {t(messages.length > 1 ? 'showHandoff' : 'skipChatHandoff')}
               </button>
             </div>
           )}
@@ -750,12 +776,11 @@ const App: React.FC = () => {
                 key={idempotencyKeyRef.current}
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}
-                canSend={chatReady}
-                describedBy={appMode === 'intake' ? chatReady ? 'cloudia-chat-privacy' : 'cloudia-purpose-label' : undefined}
+                describedBy={appMode === 'intake' ? showOpeningPrivacy ? 'cloudia-pii-note' : 'cloudia-chat-privacy' : undefined}
                 inputRef={inputRef}
                 placeholderKey={chatPlaceholderKey(appMode)}
               />
-              {appMode === 'intake' && chatReady && (
+              {appMode === 'intake' && !showOpeningPrivacy && (
                 <p id="cloudia-chat-privacy" className="mt-1 text-xs text-slate-600">
                   <PrivacyPolicyLink label={t('chatPrivacyReminder')} />
                 </p>

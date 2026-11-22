@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { ChatPlaceholderKey } from '../utils/chatView';
 
@@ -22,12 +22,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
   placeholderKey = 'typeYourMessage',
 }) => {
   const [inputText, setInputText] = useState('');
+  const composing = useRef(false);
   const { t } = useLanguage();
   const placeholder = t(placeholderKey);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || isLoading || disabled || !canSend) return;
+    if (composing.current || !inputText.trim() || isLoading || disabled || !canSend) return;
     onSendMessage(inputText);
     setInputText('');
   };
@@ -41,6 +42,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
         type="text"
         value={inputText}
         onChange={(e) => setInputText(e.target.value)}
+        onCompositionStart={() => { composing.current = true; }}
+        onCompositionEnd={() => { composing.current = false; }}
         placeholder={placeholder}
         className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-500 bg-white px-3 py-2 text-base text-slate-900 outline-none transition-shadow placeholder:text-slate-500 focus:border-navy focus:ring-2 focus:ring-navy/20 disabled:cursor-not-allowed disabled:bg-slate-100"
         disabled={isDisabled}

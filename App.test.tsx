@@ -304,7 +304,10 @@ describe('industry entry first view', () => {
     expect(markup).not.toContain(translations.ja.piiNotice);
     expect(markup).toContain(translations.ja.introCalendarLink);
     expect(markup).toContain(translations.ja.skipChatHandoff);
-    // 目的選択は残す。
+    const firstSendButton = markup.match(/<button[^>]+aria-label="送信"[^>]*>/)?.[0];
+    expect(firstSendButton).toBeDefined();
+    expect(firstSendButton).not.toContain(' disabled=""');
+    // 目的を選ぶ導線も残す。
     expect(markup).toContain(translations.ja.intentPickerPrompt);
   });
 

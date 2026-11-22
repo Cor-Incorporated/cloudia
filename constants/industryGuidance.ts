@@ -59,8 +59,8 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
       en: 'To start, what would you like to do, for example drafting referral letters or organizing nursing summaries?',
     },
     entryQuestion: {
-      ja: '医療機関のどの業務について相談したいですか？',
-      en: 'What healthcare task would you like to discuss?',
+      ja: '院内業務のご相談を伺います。紹介状や看護記録など、どの作業でお困りですか？',
+      en: 'I can help with healthcare workflows. What task is difficult, such as referral letters or nursing records?',
     },
     privacyBoundary: {
       ja: '患者さんの実データやカルテ、認証情報は書かないでください。ここでは診断も、結果の保証もしません。',
@@ -79,8 +79,8 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
       en: 'To start, what would you like to do, for example drafting answers for client companies or organizing case documents?',
     },
     entryQuestion: {
-      ja: '士業のどの業務について相談したいですか？',
-      en: 'What work in your professional practice would you like to discuss?',
+      ja: '士業の業務相談を伺います。回答案づくりや案件資料など、何を効率化したいですか？',
+      en: 'I can help with professional practice workflows. What would you streamline, such as drafting replies or organizing case files?',
     },
     privacyBoundary: {
       ja: '顧問先・依頼者の実データや認証情報は書かないでください。法律や税務の結論は出しません。',
@@ -99,8 +99,8 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
       en: 'To start, what would you like to do, for example transcribing reports from the site or drafting documents?',
     },
     entryQuestion: {
-      ja: '建設のどの業務について相談したいですか？',
-      en: 'What construction task would you like to discuss?',
+      ja: '建設現場の業務相談を伺います。現場報告の転記や書類作成など、どこに手間がかかっていますか？',
+      en: 'I can help with construction workflows. What takes time, such as transferring site reports or preparing documents?',
     },
     privacyBoundary: {
       ja: '現場の実データや機密資料を書く必要はありません。工期や安全の適合は、ここでは断定しません。',
@@ -119,8 +119,8 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
       en: 'To start, what would you like to do, for example daily reports or the clues you want to leave for the next person on a task?',
     },
     entryQuestion: {
-      ja: '製造のどの業務について相談したいですか？',
-      en: 'What manufacturing task would you like to discuss?',
+      ja: '製造現場の業務相談を伺います。日報や作業の引き継ぎなど、どの作業を見直したいですか？',
+      en: 'I can help with manufacturing workflows. What would you improve, such as daily reports or shift handovers?',
     },
     privacyBoundary: {
       ja: '現場の実データや機密資料を書く必要はありません。品質や歩留まりの改善は、ここでは断定しません。',
@@ -139,8 +139,8 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
       en: 'To start, what would you like to do, for example searching school documents or transcribing into the academic system?',
     },
     entryQuestion: {
-      ja: '教育機関のどの業務について相談したいですか？',
-      en: 'What work at your school would you like to discuss?',
+      ja: '学校業務のご相談を伺います。学内資料の検索や教務システムへの転記など、どこに手間がかかっていますか？',
+      en: 'I can help with school workflows. What takes time, such as finding school documents or transferring records?',
     },
     privacyBoundary: {
       ja: '学生・生徒の実データ、機密資料、認証情報は書かないでください。学習効果は、ここでは断定しません。',
