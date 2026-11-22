@@ -108,9 +108,11 @@ describe('industry reception locale before URL sanitization', () => {
     }
   });
 
+  it.each(['ja', 'en'])('honors the explicit %s reception language', (locale) => {
+    expect(industryEntryLocale(`?source=industry-medical&locale=${locale}`)).toBe(locale);
+  });
+
   it.each([
-    '?source=industry-medical&locale=ja',
-    '?source=industry-medical&locale=en',
     '?source=industry-medical&locale=zh-CN',
     '?source=industry-medical&locale=ko&locale=ja',
     '?source=industry-medical&source=industry-shigyo&locale=zh',

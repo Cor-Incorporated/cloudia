@@ -17,11 +17,12 @@ export function contactCopyLocale(raw: unknown): Locale {
   return raw === 'ja' ? 'ja' : 'en';
 }
 
-/** The industry pages in zh, ko, and es start the two-language reception in English. */
+/** Resolve the reception language requested by a supported industry page. */
 export function industryEntryLocale(search: string): Locale | null {
   if (!isIndustryEntrySource(parseEntrySourceFromSearch(search))) return null;
   const [locale, duplicate] = new URLSearchParams(search).getAll('locale');
   if (duplicate !== undefined) return null;
+  if (isContactLocale(locale)) return locale;
   return locale === 'zh' || locale === 'ko' || locale === 'es' ? 'en' : null;
 }
 
