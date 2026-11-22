@@ -11,7 +11,7 @@ function stubBrowser(search = '') {
   vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
 }
 
-function renderHeader(props: { search?: string; returnHref?: string | null; returnLabel?: string | null } = {}): string {
+function renderHeader(props: { search?: string; returnHref?: string | null; returnLabel?: string | null; contentHasHeading?: boolean } = {}): string {
   stubBrowser(props.search ?? '');
   return renderToStaticMarkup(
     <LanguageProvider>
@@ -21,6 +21,7 @@ function renderHeader(props: { search?: string; returnHref?: string | null; retu
         returnLabel={props.returnLabel === undefined ? translations.ja.backToCorSite : props.returnLabel}
         locale="ja"
         onSelectLocale={() => undefined}
+        contentHasHeading={props.contentHasHeading}
       />
     </LanguageProvider>,
   );
@@ -90,6 +91,12 @@ describe('SiteHeader', () => {
     const classes = (h1.match(/class="([^"]*)"/)?.[1] ?? '').split(/\s+/);
     expect(classes).toContain('sr-only');
     expect(classes).toContain('lg:not-sr-only');
+  });
+
+  it('keeps the brand title as text when the main content provides the heading', () => {
+    const markup = renderHeader({ contentHasHeading: true });
+    expect(markup).not.toContain('<h1');
+    expect(markup).toContain(`>${translations.ja.title}</p>`);
   });
 
   it('does not turn the logo into a link', () => {

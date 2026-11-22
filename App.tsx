@@ -546,6 +546,7 @@ const App: React.FC = () => {
           returnLabel={returnHref && returnLabelKey ? t(returnLabelKey) : null}
           locale={locale}
           onSelectLocale={setLocale}
+          contentHasHeading={Boolean(industryName) || showHandoff}
           showMockBadge={isContactChatMock() && appMode === 'intake'}
         />
       )}
