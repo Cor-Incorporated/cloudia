@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import PrivacyPolicyLink from './PrivacyPolicyLink';
 
@@ -13,15 +13,22 @@ interface HandoffFormProps {
   values: HandoffValues;
   onChange: (values: HandoffValues) => void;
   disabled?: boolean;
+  submitFailed?: boolean;
   onBack: () => void;
   onCancel: () => void;
   onSubmit: (values: HandoffValues) => void;
 }
 
-const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, onBack, onCancel, onSubmit }) => {
+const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, submitFailed, onBack, onCancel, onSubmit }) => {
   const { t } = useLanguage();
   // honeypot
   const [website, setWebsite] = useState('');
+  const nameInput = useRef<HTMLInputElement>(null);
+  const submitButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { nameInput.current?.focus(); }, []);
+  useEffect(() => {
+    if (submitFailed && !disabled) submitButton.current?.focus();
+  }, [submitFailed, disabled]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +47,7 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, o
   };
 
   const field =
-    'min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-navy focus:ring-2 focus:ring-navy/20 disabled:bg-slate-100';
+    'min-h-11 w-full rounded-lg border border-slate-500 bg-white px-3 py-2.5 text-base text-slate-900 outline-none focus:border-navy focus:ring-2 focus:ring-navy/20 disabled:bg-slate-100';
 
   return (
     <form onSubmit={handleSubmit} className="relative space-y-3 border-t border-slate-200 bg-white p-4">
@@ -52,7 +59,7 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, o
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="space-y-1 text-xs text-slate-700">
           <span>{t('handoffName')}</span>
-          <input className={field} value={values.name} onChange={(e) => update('name', e.target.value)} required disabled={disabled} autoComplete="name" />
+          <input ref={nameInput} className={field} value={values.name} onChange={(e) => update('name', e.target.value)} required disabled={disabled} autoComplete="name" />
         </label>
         <label className="space-y-1 text-xs text-slate-700">
           <span>{t('handoffEmail')}</span>
@@ -74,11 +81,18 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, o
           <input tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
         </label>
       </div>
+      {submitFailed && (
+        <p id="handoff-submit-error" role="alert" className="text-sm text-red-800">
+          {t('handoffSubmitError')}
+        </p>
+      )}
       {/* The submit button comes first: in the narrow launcher panel the
           buttons stack, and the primary action should not sit below the fold. */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <button
+          ref={submitButton}
           type="submit"
+          aria-describedby={submitFailed ? 'handoff-submit-error' : undefined}
           disabled={disabled}
           className="min-h-11 w-full rounded-lg bg-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:bg-slate-300 sm:w-auto"
         >

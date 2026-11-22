@@ -15,7 +15,7 @@ const IntentPicker: React.FC<IntentPickerProps> = ({ selected, onSelect, disable
 
   return (
     <fieldset className="space-y-2" aria-describedby={describedBy}>
-      <legend className="text-sm font-medium text-gray-800">{t('intentPickerPrompt')}</legend>
+      <legend id="cloudia-purpose-label" className="text-sm font-medium text-gray-800">{t('intentPickerPrompt')}</legend>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="group" aria-label={t('intentPickerLabel')}>
         {CONTACT_INTENT_DISPLAY_OPTIONS.map((option) => {
           const isSelected = selected !== null && option.intents.some((intent) => intent === selected);

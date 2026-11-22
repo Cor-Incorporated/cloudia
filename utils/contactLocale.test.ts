@@ -16,7 +16,6 @@ const RECEPTION_KEYS = [
   'handoffEmail',
   'handoffSubmit',
   'skipChatHandoff',
-  'unavailableExtensions',
   'fallbackNotice',
   'retry',
   'aiError',
@@ -77,7 +76,6 @@ describe('contact locales', () => {
         expect(label.length).toBeGreaterThan(1);
       }
       expect(showDirectHandoff(path())).toBe(true);
-      expect(translations[locale].unavailableExtensions).toContain('not available');
     }
   });
 

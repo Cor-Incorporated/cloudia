@@ -69,7 +69,7 @@ describe('SiteHeader', () => {
     expect(narrowLanguage).toBeGreaterThan(returnLink);
   });
 
-  it('lets the return link shrink and truncate inside the narrow header', () => {
+  it('shows the short return label on narrow screens and keeps the full accessible name', () => {
     const markup = renderHeader();
     const linkClasses = (markup.match(/data-testid="header-return"[^>]*class="([^"]*)"/)?.[1] ?? '').split(/\s+/);
     expect(linkClasses).not.toContain('min-w-0');
@@ -77,12 +77,10 @@ describe('SiteHeader', () => {
     expect(linkClasses).toContain('min-h-11');
     expect(linkClasses).toContain('min-w-11');
 
-    const textClasses = (markup.match(/<span class="([^"]*ml-1\.5[^"]*)">/)?.[1] ?? '').split(/\s+/);
-    expect(textClasses).toContain('truncate');
-    expect(textClasses).toContain('min-w-0');
-
+    expect(markup).toContain(`lg:hidden">${translations.ja.backShort}</span>`);
+    expect(markup).toContain(`lg:inline">${translations.ja.backToCorSite}</span>`);
     expect(markup).toContain(`title="${translations.ja.backToCorSite}"`);
-    expect(markup).not.toMatch(/data-testid="header-return"[^>]*aria-label=/);
+    expect(markup).toContain(`aria-label="${translations.ja.backToCorSite}"`);
   });
 
   it('keeps the title in the DOM, visually hidden below 1024px', () => {

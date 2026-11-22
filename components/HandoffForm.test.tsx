@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import HandoffForm from './HandoffForm';
 import { LanguageProvider } from '../contexts/LanguageContext';
 
-function renderForm(): string {
+function renderForm(submitFailed = false): string {
   vi.stubGlobal('window', { location: { search: '' } });
   vi.stubGlobal('navigator', { language: 'ja-JP' });
   vi.stubGlobal('localStorage', {
@@ -14,6 +14,7 @@ function renderForm(): string {
   return renderToStaticMarkup(
     <LanguageProvider>
       <HandoffForm
+        submitFailed={submitFailed}
         values={{ name: '', email: '', company: '', message: '' }}
         onChange={() => undefined}
         onBack={() => undefined}
@@ -56,5 +57,13 @@ describe('HandoffForm', () => {
     expect(back).toBeLessThan(cancel);
     // The first button must also be the one that submits, not just carry its label.
     expect(markup).toMatch(/<button type="submit"[^>]*>問い合わせを送信</);
+  });
+
+  it('announces a failed submission beside the submit button', () => {
+    const markup = renderForm(true);
+    expect(markup).toContain('id="handoff-submit-error" role="alert"');
+    expect(markup).toMatch(/<button type="submit" aria-describedby="handoff-submit-error"/);
+    expect(markup).toContain('入力内容は残っています。');
+    expect(renderForm()).not.toContain('handoff-submit-error');
   });
 });

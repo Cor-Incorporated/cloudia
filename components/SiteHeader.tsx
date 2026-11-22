@@ -59,11 +59,13 @@ const SiteHeader: React.FC<SiteHeaderProps> = ({
           <a
             data-testid="header-return"
             href={returnHref}
+            aria-label={returnLabel}
             title={returnLabel}
             className="inline-flex min-h-11 min-w-11 items-center justify-center overflow-hidden rounded-full border border-navy px-2 text-sm font-semibold text-navy no-underline hover:bg-navy/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy lg:px-3.5"
           >
             <span aria-hidden="true" className="shrink-0">←</span>
-            <span className="ml-1.5 min-w-0 truncate">{returnLabel}</span>
+            <span aria-hidden="true" className="ml-1.5 whitespace-nowrap lg:hidden">{t('backShort')}</span>
+            <span aria-hidden="true" className="ml-1.5 hidden min-w-0 truncate lg:inline">{returnLabel}</span>
           </a>
         )}
         <LanguageSwitch locale={locale} onSelectLocale={onSelectLocale} />

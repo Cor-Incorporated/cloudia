@@ -16,7 +16,7 @@ const FallbackNotice: React.FC<FallbackNoticeProps> = ({ visible, onRetry }) => 
 
   return (
     <div
-      className="mx-3 mb-2 shrink-0 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-950 ring-1 ring-amber-200 sm:mx-5"
+      className="mx-3 mb-2 shrink-0 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 sm:mx-5"
       role="status"
     >
       <p>{t('fallbackNotice')}</p>
