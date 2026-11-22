@@ -26,6 +26,15 @@ function renderForm(submitFailed = false): string {
 }
 
 describe('HandoffForm', () => {
+  it('names the form with its heading and connects the confidentiality notice to the message field', () => {
+    const markup = renderForm();
+
+    expect(markup).toContain('aria-labelledby="handoff-title"');
+    expect(markup).toMatch(/<h1 id="handoff-title"[^>]*>ご連絡先<\/h1>/);
+    expect(markup).toContain('id="handoff-message-hint"');
+    expect(markup).toContain('<textarea aria-describedby="handoff-message-hint"');
+  });
+
   it('marks the required fields in their labels', () => {
     const markup = renderForm();
 

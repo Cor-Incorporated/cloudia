@@ -20,7 +20,7 @@ const IntroPanel: React.FC<IntroPanelProps> = ({ mode, modeSwitchHref, calendarT
     <nav
       data-testid="cloudia-intro-panel"
       aria-label={t('introLinksLabel')}
-      className="ml-10 mt-1 flex flex-wrap gap-x-4 px-3"
+      className="mt-2 flex flex-wrap gap-x-4"
     >
       <a href={modeSwitchHref} className={introLinkClassName}>
         {t(mode === 'ambassador' ? 'introReceptionLink' : 'ambassadorLink')}

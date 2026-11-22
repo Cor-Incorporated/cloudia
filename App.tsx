@@ -26,7 +26,7 @@ import {
 } from './utils/returnTarget';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import { parseEntrySourceFromSearch } from './constants/entrySources';
-import { historyHasIndustryReception, industryPrivacyBoundary, industryQuestion } from './constants/industryGuidance';
+import { historyHasIndustryReception, industryLabel, industryPrivacyBoundary, industryQuestion } from './constants/industryGuidance';
 import { showDirectHandoff, showReadyHandoff } from './utils/inquiryPath';
 import {
   isContactChatMock,
@@ -143,9 +143,9 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return null;
     return parseEntrySourceFromSearch(window.location.search);
   }, []);
-  // 業態入口の最初の見せ方（専用コピー）。開始前の最初の吹き出しは業態固有の問い 1 つで、
-  // 汎用の挨拶も業態ラベルも重ねない。messages と API への送信内容は変えない。
+  // 見出しと最初の問いは画面表示専用。messages と API への送信内容は変えない。
   const industryQuestionText = appMode === 'intake' ? industryQuestion(entrySource, locale) : null;
+  const industryName = industryQuestionText ? industryLabel(entrySource, locale) : null;
   const industryBoundaryText = appMode === 'intake' ? industryPrivacyBoundary(entrySource, locale) : null;
   const [sessionId, setSessionId] = useState<string | null>(() => readSessionId(appMode, locale, selectedIntent));
   const idempotencyKeyRef = useRef(uuidv4());
@@ -561,7 +561,7 @@ const App: React.FC = () => {
         <section
           className={`mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col bg-white shadow-sm ${showHandoff ? 'overflow-y-auto' : 'overflow-hidden'}`}
         >
-          {showNewConversation({ selectedIntent, messageCount: messages.length, submitted }) && (
+          {!showHandoff && showNewConversation({ selectedIntent, messageCount: messages.length, submitted }) && (
             <div
               data-testid="conversation-actions"
               className="flex min-h-11 shrink-0 items-center justify-end px-3 pt-1"
@@ -576,7 +576,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {isLoading && activeRequest && (
+          {isLoading && activeRequest && !showHandoff && (
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2 text-xs text-slate-500" role="status">
               <span>{t('thinking')}</span>
               <button
@@ -591,18 +591,27 @@ const App: React.FC = () => {
 
           <div
             ref={listRef}
-            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-white p-3 custom-scrollbar sm:p-5"
+            className={`${showHandoff ? 'hidden' : 'flex'} min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-white p-3 custom-scrollbar sm:p-5`}
             aria-live="polite"
             aria-relevant="additions"
             aria-busy={isLoading}
             role="log"
           >
+            {industryName && (
+              <h1 className="text-balance text-lg font-semibold leading-tight text-slate-950 sm:text-2xl">
+                {t('industryConsultationTitle', { industry: industryName })}
+              </h1>
+            )}
             {thread.map((msg, index) => (
               <React.Fragment key={msg.id}>
-                <ChatMessage message={msg} plainText />
+                {industryQuestionText && index === 0 && msg.text === industryQuestionText ? (
+                  <p className="text-pretty text-base leading-relaxed text-slate-800">{msg.text}</p>
+                ) : (
+                  <ChatMessage message={msg} plainText />
+                )}
                 {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState !== 'started' && (
-                  <div className="mt-1 max-w-2xl rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:ml-10 sm:p-4">
-                    <div id="cloudia-pii-note" className="mb-3">
+                  <div className="mt-2 max-w-2xl space-y-3">
+                    <div id="cloudia-pii-note">
                       <PiiNotice note={industryBoundaryText ?? undefined} />
                     </div>
                     <IntentPicker
@@ -618,7 +627,7 @@ const App: React.FC = () => {
                     {t('intentSelected', { label: getIntentDisplayLabel(selectedIntent, locale) })}
                   </p>
                 )}
-                {index === 0 && msg.sender === 'ai' && !showHandoff && !submitted && (
+                {index === 0 && msg.sender === 'ai' && !showHandoff && !submitted && (appMode !== 'intake' || intentStartState !== 'started') && (
                   <IntroPanel
                     mode={appMode}
                     modeSwitchHref={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
@@ -735,7 +744,7 @@ const App: React.FC = () => {
           )}
 
           {!submitted && !faqResolved && (
-            <div hidden={showHandoff} className="shrink-0 border-t border-slate-200 bg-white px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
+            <div hidden={showHandoff} className="shrink-0 border-t border-slate-200 bg-white px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-4">
               <ChatInput
                 key={idempotencyKeyRef.current}
                 onSendMessage={handleSendMessage}

@@ -1,6 +1,7 @@
 export const translations = {
   en: {
     title: "Cloudia — Cor. AI Reception",
+    industryConsultationTitle: "{{industry}} inquiries",
     welcomeMessage:
       "I'm Cloudia, Cor.'s AI receptionist. I can help you describe your inquiry and pass it to our team.",
     welcomeMessageAmbassador:
@@ -30,7 +31,9 @@ export const translations = {
     aiDefaultError: "Error communicating with AI",
     sources: "Sources",
     handoffTitle: "Contact details",
-    handoffHint: "We will use this only to follow up. Do not paste confidential documents.",
+    handoffHint: "We will use these details to follow up on your inquiry.",
+    handoffMessageHint: "Do not paste confidential documents.",
+    handoffSubmitting: "Sending your inquiry…",
     privacyLinkBefore: "For details on how we handle personal information, please review our ",
     privacyLinkText: "Privacy Policy",
     privacyLinkAfter: ".",
@@ -74,6 +77,7 @@ export const translations = {
   },
   ja: {
     title: "Cloudia — Cor. AI受付",
+    industryConsultationTitle: "{{industry}}のご相談",
     welcomeMessage:
       "Cor.のAI受付 Cloudiaです。ご相談内容を整理して、担当者へ引き継ぎます。",
     welcomeMessageAmbassador:
@@ -103,7 +107,9 @@ export const translations = {
     aiDefaultError: "AIとの通信エラー",
     sources: "情報源",
     handoffTitle: "ご連絡先",
-    handoffHint: "担当からのご連絡にのみ使用します。機密文書は貼り付けないでください。",
+    handoffHint: "担当からのご連絡にのみ使用します。",
+    handoffMessageHint: "機密文書は貼り付けないでください。",
+    handoffSubmitting: "問い合わせを送信中…",
     privacyLinkBefore: "個人情報の取扱いについては",
     privacyLinkText: "プライバシーポリシー",
     privacyLinkAfter: "をご確認ください。",

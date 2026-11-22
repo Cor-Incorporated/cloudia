@@ -15,7 +15,7 @@ const PiiNotice: React.FC<PiiNoticeProps> = ({ note }) => {
 
   return (
     <p
-      className="rounded-xl bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-950 ring-1 ring-amber-200"
+      className="rounded-xl bg-amber-50 px-3 py-2 text-pretty text-sm leading-relaxed text-amber-950 ring-1 ring-amber-200"
       role="note"
     >
       {note ?? t('piiNotice')}
