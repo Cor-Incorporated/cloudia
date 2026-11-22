@@ -51,9 +51,12 @@ describe('sanitizePageLocation', () => {
     expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', '')).toBe('https://cor-jp.com/contact/chat/');
   });
 
-  it('never echoes the raw value: it writes the canonical key instead', () => {
+  it('keeps the canonical intent and does not promote noncanonical route markers', () => {
     expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', '?intent=%20Grift-Team-Beta%20&utm_source=GRIFT')).toBe(
-      'https://cor-jp.com/contact/chat/?intent=grift-team-beta&utm_source=grift',
+      'https://cor-jp.com/contact/chat/?intent=grift-team-beta',
+    );
+    expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', '?utm_source=grift&utm_source=grift')).toBe(
+      'https://cor-jp.com/contact/chat/',
     );
   });
 
