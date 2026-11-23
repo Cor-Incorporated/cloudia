@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { translations, type Locale } from '../translations';
-import { PRIVACY_AI_RECEPTION_ANCHOR, PRIVACY_POLICY_PATHS, privacyPolicyHref } from './privacy';
+import { translations } from '../translations';
+import { PRIVACY_AI_RECEPTION_ANCHOR, privacyPolicyHref } from './privacy';
 
 describe('privacyPolicyHref', () => {
   it('points each UI language at its own policy page and the AI reception section', () => {
-    expect(privacyPolicyHref('ja')).toBe('/privacy/#ai-reception');
-    expect(privacyPolicyHref('en')).toBe('/en/privacy/#ai-reception');
+    expect(privacyPolicyHref('ja')).toBe('https://cor-jp.com/privacy/#ai-reception');
+    expect(privacyPolicyHref('en')).toBe('https://cor-jp.com/en/privacy/#ai-reception');
   });
 
-  it('has a policy page for every UI language', () => {
-    const locales = Object.keys(translations) as Locale[];
-    expect(Object.keys(PRIVACY_POLICY_PATHS).sort()).toEqual([...locales].sort());
-    for (const locale of locales) {
-      expect(PRIVACY_POLICY_PATHS[locale]).toMatch(/^\/(?:[a-z]{2}\/)?privacy\/$/);
-    }
+  it.each(['zh', 'ko', 'es'])('opens the policy in the original %s language from a standalone page', (lang) => {
+    expect(privacyPolicyHref('en', '?locale=' + lang)).toBe('https://cor-jp.com/' + lang + '/privacy/#ai-reception');
   });
 
   it('uses an anchor that is a plain HTML id', () => {

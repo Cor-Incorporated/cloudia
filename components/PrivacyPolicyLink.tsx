@@ -13,12 +13,13 @@ interface PrivacyPolicyLinkProps {
  */
 const PrivacyPolicyLink: React.FC<PrivacyPolicyLinkProps> = ({ className, label }) => {
   const { locale, t } = useLanguage();
+  const search = typeof window === 'undefined' ? '' : window.location.search;
 
   return (
     <span className={className}>
       {!label && t('privacyLinkBefore')}
       <a
-        href={privacyPolicyHref(locale)}
+        href={privacyPolicyHref(locale, search)}
         target="_blank"
         rel="noopener noreferrer"
         className="underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"

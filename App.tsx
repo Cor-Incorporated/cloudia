@@ -4,7 +4,7 @@ import ChatInput from './components/ChatInput';
 import ChatMessage from './components/ChatMessage';
 import ExpressionAvatar from './components/ExpressionAvatar';
 import ContractorInquiryPanel from './components/ContractorInquiryPanel';
-import { materialRequestHref } from './constants/siteLinks';
+import { companyPageHref, materialRequestHref } from './constants/siteLinks';
 import IntentPicker from './components/IntentPicker';
 import PiiNotice from './components/PiiNotice';
 import PrivacyPolicyLink from './components/PrivacyPolicyLink';
@@ -133,7 +133,7 @@ const App: React.FC = () => {
     );
   }, [embedMode, locale]);
   const siteSearch = typeof window === 'undefined' ? '' : window.location.search;
-  const returnHref = returnDecision?.href ?? null;
+  const returnHref = returnDecision ? companyPageHref(returnDecision.href) : null;
   const returnLabelKind = returnHref ? classifyReturnTarget(returnHref) : null;
   const returnLabelKey = returnLabelKind ? RETURN_LINK_LABEL_KEYS[returnLabelKind] : null;
 
