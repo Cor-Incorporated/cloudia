@@ -8,18 +8,21 @@ interface PiiNoticeProps {
    * どちらの場合も同意先の privacy policy link は同じ 1 本を出す。
    */
   note?: string;
+  compact?: boolean;
 }
 
-const PiiNotice: React.FC<PiiNoticeProps> = ({ note }) => {
+const PiiNotice: React.FC<PiiNoticeProps> = ({ note, compact = false }) => {
   const { t } = useLanguage();
 
   return (
     <p
-      className="rounded-xl bg-amber-50 px-3 py-2 text-pretty text-sm leading-relaxed text-amber-950 ring-1 ring-amber-200"
+      className={compact
+        ? "text-pretty text-xs leading-relaxed text-slate-700"
+        : "rounded-xl bg-amber-50 px-3 py-2 text-pretty text-sm leading-relaxed text-amber-950 ring-1 ring-amber-200"}
       role="note"
     >
       {note ?? t('piiNotice')}
-      <PrivacyPolicyLink className="mt-1 block" label={note ? t('privacyLinkText') : undefined} />
+      <PrivacyPolicyLink className={compact ? "ml-1 inline-block" : "mt-1 block"} label={note ? t('privacyLinkText') : undefined} />
     </p>
   );
 };

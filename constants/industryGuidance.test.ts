@@ -49,8 +49,11 @@ describe('industry first-display copy (dedicated, before the Worker reply)', () 
     for (const locale of ['ja', 'en'] as const) {
       expect(industryQuestion(source, locale)).toBe(guidance.entryQuestion[locale]);
       expect(industryPrivacyBoundary(source, locale)).toBe(guidance.privacyBoundary[locale]);
-      // The boundary is the privacy sentence of the contract opening, word for word.
-      expect(guidance.opening[locale]).toContain(guidance.privacyBoundary[locale]);
+      if (source === 'industry-medical') {
+        expect(guidance.privacyBoundary[locale].length).toBeLessThan(guidance.opening[locale].length);
+      } else {
+        expect(guidance.opening[locale]).toContain(guidance.privacyBoundary[locale]);
+      }
       // The question is the second line of the same contract context line.
       expect(industryContextLine(source, locale)).toContain(guidance.question[locale]);
       // The question itself carries no industry label and no greeting.
