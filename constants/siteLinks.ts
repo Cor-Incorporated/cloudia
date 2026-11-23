@@ -24,3 +24,13 @@ export const CONTACT_PAGE_PATHS: Readonly<Record<Locale, string>> = {
 export function contactCalendarHref(locale: Locale): string {
   return `${CONTACT_PAGE_PATHS[locale]}?source=footer-calendar#contact-calendar`;
 }
+
+/** The Cor site provides the brochure form in five languages, including the three for which the chat uses English. */
+export function materialRequestHref(uiLocale: Locale, search: string): string {
+  const values = new URLSearchParams(search).getAll('locale');
+  const requested = values.length === 1 ? values[0] : null;
+  const useOriginal = uiLocale === 'en' && (requested === 'zh' || requested === 'ko' || requested === 'es');
+  const locale = useOriginal ? requested : uiLocale;
+  const prefix = locale === 'ja' ? '' : '/' + locale;
+  return 'https://cor-jp.com' + prefix + '/contact/materials/';
+}
