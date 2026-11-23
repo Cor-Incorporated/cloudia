@@ -113,6 +113,12 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, s
           {t('handoffSubmitError')}
         </p>
       )}
+      {collectContact && (
+        <section aria-labelledby="handoff-reviewed-message" className="space-y-1 rounded-lg border border-slate-300 bg-slate-50 p-3">
+          <h2 id="handoff-reviewed-message" className="text-sm font-semibold text-slate-900">{t('handoffMessagePreview')}</h2>
+          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-800">{values.message.trim()}</p>
+        </section>
+      )}
       {/* The submit button comes first: in the narrow launcher panel the
           buttons stack, and the primary action should not sit below the fold. */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

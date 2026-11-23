@@ -37,10 +37,27 @@ import {
   type StructuredLead,
   type ChatResult,
 } from './services/contactChatClient';
+import { translations } from './translations';
 import { submitContactInquiry } from './services/submitWithAnalytics';
 
 // Classification re-export helper
 type Classif = ApiClassification;
+
+// Match the visible action in either UI language as well as common request-only replies.
+const handoffLabels = Object.values(translations).map((copy) => copy.showHandoff.toLowerCase());
+const japaneseHandoff = /^(?:(?:お?問い合わせ(?:を?し)?|(?:担当(?:者|の方)?|スタッフ)に(?:相談|連絡)し)たい(?:です)?|(?:担当(?:者)?への)?(?:相談|問い合わせ)(?:を希望(?:します)?|希望))$/;
+const englishHandoff = /^i (?:want|would like) to (?:contact (?:you|the team)|make an inquiry|speak (?:with|to) (?:someone|a representative))$/;
+
+function isHandoffRequest(text: string): boolean {
+  const phrase = text.trim().replace(/[。.!！]+$/, '').toLowerCase();
+  return handoffLabels.includes(phrase) || japaneseHandoff.test(phrase) || englishHandoff.test(phrase);
+}
+
+function usableHandoffSummary(value: string): boolean {
+  const summary = value.trim();
+  return Boolean(summary) && !/^(?:要約未生成|Summary unavailable)/i.test(summary) &&
+    !isHandoffRequest(summary);
+}
 
 const EMPTY_HANDOFF_VALUES: HandoffValues = {
   name: '',
@@ -389,7 +406,14 @@ const App: React.FC = () => {
         setSessionId(result.sessionId);
         rememberSessionId(appMode, locale, selectedIntent, result.sessionId);
       }
-      if (result.summary) setConversationSummary(result.summary);
+      const { summary } = result;
+      if (summary) {
+        setConversationSummary((current) =>
+          industryName && isHandoffRequest(inputText) && usableHandoffSummary(current)
+            ? current
+            : summary,
+        );
+      }
       if (result.structuredLead) setStructuredLead(result.structuredLead);
       setLastFailedInput(null);
       setApiDegraded(false);
@@ -417,7 +441,7 @@ const App: React.FC = () => {
     } finally {
       finishRequest(controller);
     }
-  }, [applyFaqResolutionFromResult, beginRequest, entrySource, finishRequest, messages, locale, appMode, selectedIntent, submitted, sessionId]);
+  }, [applyFaqResolutionFromResult, beginRequest, entrySource, finishRequest, industryName, messages, locale, appMode, selectedIntent, submitted, sessionId]);
 
   const handleRetryChat = useCallback(() => {
     if (lastFailedInput) void handleSendMessage(lastFailedInput, true);
@@ -503,8 +527,8 @@ const App: React.FC = () => {
         email: values.email,
         company: values.company,
         message: values.message.trim(),
-        summaryText: conversationSummary,
-        structuredLead,
+        summaryText: industryName ? values.message.trim() : conversationSummary,
+        structuredLead: industryName ? undefined : structuredLead,
         classification,
         intent: selectedIntent,
         entrySource,
@@ -545,10 +569,19 @@ const App: React.FC = () => {
   const readyHandoffVisible = showReadyHandoff(pathInput);
   const directHandoffVisible = showDirectHandoff(pathInput) && (Boolean(industryQuestionText) || messages.length > 1 || apiDegraded);
   const openHandoff = () => {
-    const lastUserMessage = messages.slice().reverse().find((message) => message.sender === 'user');
+    const userMessages = messages.filter((message) => message.sender === 'user').reverse();
+    const lastUserText = userMessages[0]?.text ?? '';
+    const summary = conversationSummary.trim();
+    const canUseSummary = industryName
+      ? usableHandoffSummary(summary) && (readyForContact ||
+        (classification === 'genuine' && userMessages.length > 0))
+      : readyForContact;
+    const fallback = industryName && isHandoffRequest(lastUserText)
+      ? userMessages.find((message) => !isHandoffRequest(message.text))?.text ?? lastUserText
+      : lastUserText;
     setHandoffDraft((draft) => ({
       ...draft,
-      message: draft.message || (readyForContact ? conversationSummary : '') || lastUserMessage?.text || '',
+      message: draft.message || (canUseSummary ? summary : '') || fallback,
     }));
     setShowHandoff(true);
   };
