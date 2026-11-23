@@ -48,7 +48,7 @@ export interface ChatResult {
 export const CLIENT_SOURCE = 'cloudia';
 
 // Capture the entry before analytics normalizes or drops query parameters.
-const INITIAL_ENTRY_ROUTE = readContactEntryRoute(typeof window === 'undefined' ? '' : window.location.search);
+export const INITIAL_ENTRY_ROUTE = readContactEntryRoute(typeof window === 'undefined' ? '' : window.location.search);
 
 export type ChatTrafficSource = EntrySource | typeof CLIENT_SOURCE;
 
