@@ -132,6 +132,7 @@ const App: React.FC = () => {
       readStoredReturnTarget(safeSessionStorage()),
     );
   }, [embedMode, locale]);
+  const siteSearch = typeof window === 'undefined' ? '' : window.location.search;
   const returnHref = returnDecision?.href ?? null;
   const returnLabelKind = returnHref ? classifyReturnTarget(returnHref) : null;
   const returnLabelKey = returnLabelKind ? RETURN_LINK_LABEL_KEYS[returnLabelKind] : null;
@@ -739,8 +740,9 @@ const App: React.FC = () => {
                   <IntroPanel
                     mode={appMode}
                     modeSwitchHref={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
+                    siteSearch={siteSearch}
                     calendarTarget={embedMode ? '_top' : undefined}
-                    materialsHref={materialsEntryVisible ? materialRequestHref(locale, window.location.search) : undefined}
+                    materialsHref={materialsEntryVisible ? materialRequestHref(locale, siteSearch) : undefined}
                   />
                 )}
               </React.Fragment>

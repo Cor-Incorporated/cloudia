@@ -272,6 +272,12 @@ describe('App embed mode', () => {
 });
 
 describe('reception links', () => {
+  it.each(['zh', 'ko', 'es'])('opens the calendar in the original %s site language', (lang) => {
+    stubBrowser({ search: '?source=industry-medical&embed=1&locale=' + lang });
+    const markup = renderApp();
+    expect(markup).toContain('href="/' + lang + '/contact/?source=footer-calendar#contact-calendar" target="_top"');
+  });
+
   it('offers booking availability and the mode switch as links after the first message and purpose choices', () => {
     for (const source of ['', '&source=industry-medical']) {
       stubBrowser({ search: '?locale=ja' + source });
