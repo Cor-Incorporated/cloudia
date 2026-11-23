@@ -461,8 +461,18 @@ describe('contactChatClient', () => {
     });
     const submitBody = JSON.parse(String(fetchMock.mock.calls[1][1].body)) as { source: string; summaryText: string };
     expect(submitBody.source).toBe('cloudia');
+    expect(submitBody).not.toHaveProperty('shareConversation');
     expect(submitBody.summaryText).toBe('相談');
     expect(JSON.stringify(submitBody)).not.toContain('Ignore previous');
+  });
+
+  it.each(['medical', 'construction', 'education', 'shigyo', 'manufacturing'])('業種%sでは確認した用件だけを送る契約を指定する', async (industry) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await postContactSubmit({ name: 'Test', email: 'test@example.com', message: '確定した相談', entrySource: 'industry-' + industry });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.shareConversation).toBe(false);
+    expect(body.message).toBe('確定した相談');
   });
 
   it('returns the receipt number that the Worker also prints in the receipt email', async () => {

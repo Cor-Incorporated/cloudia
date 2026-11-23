@@ -21,6 +21,8 @@ corsweb `workers/contact-chat`（本番は同一オリジン `cor-jp.com/api/con
 | POST | `/api/contact/submit` | 確認した用件と連絡先の確定送信 | **LLM に渡さない** |
 | GET | `/api/contact/health` | 死活 | なし |
 
+5業種からの確定送信では `shareConversation: false` を指定する。本人が確定した用件・連絡先を渡し、担当者への通知や受付記録にそれ以前の要約・受け答えを転記しない。この指定を解釈する中央Workerを先に配備する。
+
 ### クライアント方針
 
 1. 本番埋め込み / 同一オリジン時は **相対パス**で呼ぶ。

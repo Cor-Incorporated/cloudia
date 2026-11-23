@@ -4,7 +4,7 @@
  */
 import type { AppMode, ContactIntent } from '../types';
 import type { Locale } from '../translations';
-import { parseEntrySourceValue, type EntrySource } from '../constants/entrySources';
+import { isIndustryEntrySource, parseEntrySourceValue, type EntrySource } from '../constants/entrySources';
 import { parseContactIntent } from '../constants/intents';
 import { summaryWithEntrySource, withIndustryContext } from '../constants/industryGuidance';
 
@@ -345,6 +345,9 @@ export async function postContactSubmit(
   const intentTag = payload.intent ? `[intent:${payload.intent}] ` : '';
   const body = {
     sessionId: payload.sessionId || undefined,
+    ...(isIndustryEntrySource(parseEntrySourceValue(payload.entrySource ?? payload.source))
+      ? { shareConversation: false }
+      : {}),
     idempotencyKey: payload.idempotencyKey,
     name: payload.name,
     email: payload.email,
