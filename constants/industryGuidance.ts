@@ -39,7 +39,7 @@ export interface IndustryGuidance {
   question: Record<Locale, string>;
   entryQuestion: Record<Locale, string>;
   /**
-   * The industry privacy and scope limits taken from the contract opening.
+   * The industry privacy and scope limits from the contract opening, condensed for medical.
    * Shown at the head of the screen before the Worker's first reply exists.
    * The reception contract fixture pins `opening` and `question`, not this.
    */
@@ -63,8 +63,8 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
       en: 'I can help with healthcare workflows. What task is difficult, such as referral letters or nursing records?',
     },
     privacyBoundary: {
-      ja: '患者さんの実データやカルテ、認証情報は書かないでください。ここでは診断も、結果の保証もしません。',
-      en: 'Do not write real patient data, medical records, or login credentials. This chat does not make a diagnosis or promise a result.',
+      ja: '患者情報や認証情報は入力しないでください。診断は行いません。',
+      en: 'Do not enter patient data or login details. This chat cannot diagnose.',
     },
   },
   'industry-shigyo': {

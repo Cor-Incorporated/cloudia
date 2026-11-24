@@ -26,7 +26,7 @@ import {
 } from './utils/returnTarget';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import { parseEntrySourceFromSearch } from './constants/entrySources';
-import { historyHasIndustryReception, industryLabel, industryPrivacyBoundary, industryQuestion } from './constants/industryGuidance';
+import { historyHasIndustryReception, industryLabel, industryOpening, industryPrivacyBoundary, industryQuestion } from './constants/industryGuidance';
 import { showDirectHandoff, showReadyHandoff } from './utils/inquiryPath';
 import {
   isContactChatMock,
@@ -557,6 +557,9 @@ const App: React.FC = () => {
     dropOpening: intentStartState === 'started' && historyHasIndustryReception(messages, entrySource, locale),
   });
   const showOpeningPrivacy = thread[0]?.id === messages[0]?.id;
+  const medicalWorkerOpening = entrySource === 'industry-medical' && !showOpeningPrivacy
+    ? industryOpening(entrySource, locale)
+    : null;
   const shellClass = embedMode
     ? 'flex h-dvh min-h-0 w-full overflow-hidden bg-white text-slate-900'
     : 'flex h-dvh min-h-dvh overflow-hidden bg-white text-slate-900';
@@ -632,12 +635,17 @@ const App: React.FC = () => {
                 {industryQuestionText && index === 0 && msg.text === industryQuestionText ? (
                   <p className="text-pretty text-base leading-relaxed text-slate-800">{msg.text}</p>
                 ) : (
-                  <ChatMessage message={msg} plainText />
+                  <ChatMessage
+                    message={medicalWorkerOpening && msg.sender === 'ai' && industryBoundaryText
+                      ? { ...msg, text: msg.text.replace(medicalWorkerOpening, industryBoundaryText) }
+                      : msg}
+                    plainText
+                  />
                 )}
                 {appMode === 'intake' && index === 0 && msg.id === messages[0]?.id && (
                   <div className="mt-2 max-w-2xl space-y-3">
                     <div id="cloudia-pii-note">
-                      <PiiNotice note={industryBoundaryText ?? undefined} />
+                      <PiiNotice note={industryBoundaryText ?? undefined} compact={entrySource === 'industry-medical'} />
                     </div>
                     {messages.length === 1 && (
                       <IntentPicker
