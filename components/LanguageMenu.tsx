@@ -156,7 +156,7 @@ const LanguageMenu: React.FC<LanguageMenuProps> = ({ locale, onSelectLocale }) =
         aria-controls={panelId}
         aria-label={`${t('languageMenuLabel')}: ${option.short}`}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-10 min-w-11 items-center justify-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-sm font-medium text-stone-900 hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-sm font-medium text-stone-900 hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
       >
         <span aria-hidden="true">{option.flag}</span>
         <span>{option.short}</span>

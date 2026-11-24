@@ -79,7 +79,7 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, s
         <>
           <p className="text-pretty text-base leading-relaxed text-slate-700">
             {t('handoffHint')}
-            <PrivacyPolicyLink className="mt-1 inline-flex min-h-6 items-center" label={t('privacyLinkText')} />
+            <PrivacyPolicyLink className="mt-1 inline-flex min-h-11 items-center" label={t('privacyLinkText')} />
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="space-y-1 text-sm font-medium text-slate-700">
