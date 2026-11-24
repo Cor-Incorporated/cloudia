@@ -49,16 +49,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, plainText = true }) 
       )}
       <div
         className={[
-          'max-w-[calc(100%-3rem)] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ring-1 ring-black/5 whitespace-pre-wrap break-words sm:max-w-xl',
+          'max-w-[calc(100%-3rem)] rounded-2xl px-3.5 py-2.5 text-base leading-relaxed shadow-sm ring-1 ring-black/5 whitespace-pre-wrap break-words sm:max-w-xl',
           isUser
             ? 'rounded-br-md bg-navy text-white'
             : 'rounded-bl-md bg-white text-slate-800',
         ].join(' ')}
       >
         {plainText ? (
-          <p className="m-0">{message.text}</p>
+          <p className="m-0 text-pretty">{message.text}</p>
         ) : (
-          <p className="m-0">{message.text}</p>
+          <p className="m-0 text-pretty">{message.text}</p>
         )}
         {!isUser && renderSources(message.sources)}
       </div>

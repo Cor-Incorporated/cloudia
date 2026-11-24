@@ -1,6 +1,6 @@
-import { AppMode, ContactIntent } from '../types';
+import { AppMode, Message } from '../types';
 
-export type ChatPlaceholderKey = 'typeYourMessage' | 'typeYourMessageIntake' | 'typeYourMessageChooseIntent';
+export type ChatPlaceholderKey = 'typeYourMessage' | 'typeYourMessageIntake';
 
 /**
  * Where the message list should scroll after it changes.
@@ -14,19 +14,34 @@ export function messageListScrollTarget(messageCount: number, isLoading: boolean
 }
 
 /**
- * Placeholder for the chat input. In intake mode the input stays disabled until
- * a purpose is chosen, so say that instead of inviting the visitor to type.
- * Once a purpose is chosen (even if starting the conversation failed), the
- * usual intake placeholder applies.
+ * Placeholder (and aria-label) for the chat input. The input is enabled from
+ * the first paint in both modes, so it only says which mode it is, short and
+ * clear, without explaining what to do first.
  */
-export function chatPlaceholderKey(
-  appMode: AppMode,
-  chatReady: boolean,
-  isLoading: boolean,
-  selectedIntent: ContactIntent | null,
-): ChatPlaceholderKey {
-  if (appMode !== 'intake') return 'typeYourMessage';
-  return !chatReady && !isLoading && !selectedIntent ? 'typeYourMessageChooseIntent' : 'typeYourMessageIntake';
+export function chatPlaceholderKey(appMode: AppMode): ChatPlaceholderKey {
+  return appMode === 'intake' ? 'typeYourMessageIntake' : 'typeYourMessage';
+}
+
+/**
+ * The thread as the visitor sees it. The stored opening message is the payload
+ * the Worker already receives; for an industry entry the screen shows the
+ * dedicated first-display copy instead:
+ * - before the conversation starts: the opening bubble's text becomes the one
+ *   industry question (`openingText`),
+ * - once the conversation has started: the opening bubble is dropped, because
+ *   the Worker's first reply is the reception contract text and a second copy
+ *   of the greeting or the question would sit beside it.
+ * `messages` itself, and everything sent to the API, stays unchanged.
+ */
+export function displayThread(
+  messages: Message[],
+  input: { openingText: string | null; dropOpening: boolean },
+): Message[] {
+  if (!input.openingText || messages.length === 0) return messages;
+  const [opening, ...rest] = messages;
+  if (opening.sender !== 'ai') return messages;
+  if (input.dropOpening) return rest;
+  return [{ ...opening, text: input.openingText }, ...rest];
 }
 
 /**

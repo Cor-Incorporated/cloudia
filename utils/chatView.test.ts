@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { Emotion, type Message } from '../types';
 import {
   chatPlaceholderKey,
+  displayThread,
   handoffSuccessMessage,
   messageListScrollTarget,
   showNewConversation,
@@ -21,18 +23,36 @@ describe('messageListScrollTarget', () => {
 });
 
 describe('chatPlaceholderKey', () => {
-  it('asks for a purpose first while none is chosen', () => {
-    expect(chatPlaceholderKey('intake', false, false, null)).toBe('typeYourMessageChooseIntent');
+  it('labels the input shortly by mode, without explaining what to do first', () => {
+    expect(chatPlaceholderKey('intake')).toBe('typeYourMessageIntake');
+    expect(chatPlaceholderKey('ambassador')).toBe('typeYourMessage');
+  });
+});
+
+describe('displayThread', () => {
+  const opening: Message = { id: 'opening', text: 'こんにちは。汎用の挨拶です。', sender: 'ai', emotion: Emotion.ENJOYING };
+  const QUESTION = '紹介状の下書きや看護サマリーの整理など、まず、どんなことをしたいとお考えですか。';
+
+  it('swaps the opening bubble for the industry question before the conversation starts', () => {
+    const thread = displayThread([opening], { openingText: QUESTION, dropOpening: false });
+    expect(thread).toHaveLength(1);
+    expect(thread[0]).toMatchObject({ id: 'opening', sender: 'ai', text: QUESTION });
   });
 
-  it('does not ask for a purpose again after one was chosen, even if starting failed', () => {
-    expect(chatPlaceholderKey('intake', false, false, 'local-llm-poc')).toBe('typeYourMessageIntake');
+  it('drops the opening bubble once the conversation has started, so nothing sits beside the reply', () => {
+    const reception = { ...opening, id: 'reception', text: '医療のページから開いています。…' };
+    const user = { id: 'u1', text: '紹介状の下書きです。', sender: 'user' as const };
+    const thread = displayThread([opening, reception, user], { openingText: QUESTION, dropOpening: true });
+    expect(thread.map((m) => m.id)).toEqual(['reception', 'u1']);
+    expect(thread.some((m) => m.text === 'こんにちは。汎用の挨拶です。')).toBe(false);
   });
 
-  it('uses the usual placeholders while starting, once ready, and in ambassador mode', () => {
-    expect(chatPlaceholderKey('intake', false, true, 'local-llm-poc')).toBe('typeYourMessageIntake');
-    expect(chatPlaceholderKey('intake', true, false, 'local-llm-poc')).toBe('typeYourMessageIntake');
-    expect(chatPlaceholderKey('ambassador', true, false, null)).toBe('typeYourMessage');
+  it('keeps the thread as it is for the general entry and for a user-first thread', () => {
+    expect(displayThread([opening], { openingText: null, dropOpening: false })).toEqual([opening]);
+    expect(displayThread([opening], { openingText: null, dropOpening: true })).toEqual([opening]);
+    const userFirst = [{ id: 'u1', text: '相談です。', sender: 'user' as const }];
+    expect(displayThread(userFirst, { openingText: QUESTION, dropOpening: false })).toEqual(userFirst);
+    expect(displayThread([], { openingText: QUESTION, dropOpening: true })).toEqual([]);
   });
 });
 

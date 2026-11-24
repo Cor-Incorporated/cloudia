@@ -6,23 +6,9 @@ import App from './App';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { RETURN_TARGET_STORAGE_KEY, persistReturnTarget } from './utils/returnTarget';
 import { translations } from './translations';
-
-const INTRO_KEYS = [
-  'introHeading',
-  'introHandoff',
-  'introChatBefore',
-  'introChatAfter',
-  'introReceptionBefore',
-  'introReceptionLink',
-  'introReceptionAfter',
-  'introCalendarBefore',
-  'introCalendarLink',
-  'introCalendarAfter',
-  'introBookingPreparation',
-  'backToGriftSite',
-  'backToCorSite',
-  'backToPreviousPage',
-] as const;
+import { INDUSTRY_ENTRY_SOURCES } from './constants/entrySources';
+import { industryGuidance, industryPrivacyBoundary, industryQuestion } from './constants/industryGuidance';
+import { industryEntryLocale } from './utils/contactLocale';
 
 function memoryStorage() {
   const map = new Map<string, string>();
@@ -56,10 +42,12 @@ function stubBrowser({ search = '', referrer = '', storage }: { search?: string;
   vi.stubGlobal('document', { referrer, title: '' });
 }
 
-function renderApp(props: { bookingNoticeVisible?: boolean } = {}): string {
+function renderApp(): string {
+  // index.tsx and same wiring: zh, ko, es of an industry page open in English.
+  const initialLocale = typeof window !== 'undefined' ? industryEntryLocale(window.location.search) : null;
   return renderToStaticMarkup(
-    <LanguageProvider>
-      <App {...props} />
+    <LanguageProvider initialLocale={initialLocale}>
+      <App />
     </LanguageProvider>,
   );
 }
@@ -73,7 +61,7 @@ describe('App header return link (outside the embed frame)', () => {
     stubBrowser({ search: '' });
     const markup = renderApp();
 
-    expect(markup).toContain('href="/"');
+    expect(markup).toContain('href="https://cor-jp.com/"');
     expect(markup).toContain('Cor. のサイトに戻る');
     // 戻る link の文字の 1 本だけ（絵は link にしない）。省略に備えて title にも同じ全文を置く。
     expect(markup.match(/>Cor\. のサイトに戻る<\/span>/g)).toHaveLength(1);
@@ -84,7 +72,7 @@ describe('App header return link (outside the embed frame)', () => {
     stubBrowser({ search: '?locale=en' });
     const markup = renderApp();
 
-    expect(markup).toContain('href="/en/"');
+    expect(markup).toContain('href="https://cor-jp.com/en/"');
     expect(markup).toContain('Back to the Cor. site');
   });
 
@@ -112,7 +100,7 @@ describe('App header return link (outside the embed frame)', () => {
     const headerStart = markup.indexOf('<header id="app-header"');
     expect(headerStart).toBeGreaterThan(-1);
     const header = markup.slice(headerStart, markup.indexOf('</header>', headerStart));
-    expect(header.match(/href="\/industries\/medical\/"/g) ?? []).toHaveLength(1);
+    expect(header.match(/href="https:\/\/cor-jp\.com\/industries\/medical\/"/g) ?? []).toHaveLength(1);
   });
 });
 
@@ -278,80 +266,123 @@ describe('App embed mode', () => {
     expect(markup).toContain('data-embed="true"');
     expect(markup).not.toContain('app-header');
     expect(markup).not.toContain('のサイトに戻る');
-    expect(markup).toContain('公式の AI 受付');
-    expect(markup).toContain('href="/contact/?source=footer-calendar#contact-calendar" target="_top"');
+    expect(markup).toContain(translations.ja.welcomeMessage);
+    expect(markup).toContain('href="https://cor-jp.com/contact/?source=footer-calendar#contact-calendar" target="_top"');
   });
 });
 
-describe('intro panel', () => {
-  it('defines every intro and back-link key in both Japanese and English', () => {
-    for (const key of INTRO_KEYS) {
-      expect(typeof translations.ja[key], `ja:${key}`).toBe('string');
-      expect((translations.ja[key] as string).length, `ja:${key}`).toBeGreaterThan(0);
-      expect(typeof translations.en[key], `en:${key}`).toBe('string');
-      expect((translations.en[key] as string).length, `en:${key}`).toBeGreaterThan(0);
+describe('reception links', () => {
+  it.each(['zh', 'ko', 'es'])('opens the calendar in the original %s site language', (lang) => {
+    stubBrowser({ search: '?source=industry-medical&embed=1&locale=' + lang });
+    const markup = renderApp();
+    expect(markup).toContain('href="https://cor-jp.com/' + lang + '/contact/?source=footer-calendar#contact-calendar" target="_top"');
+  });
+
+  it('offers booking availability and the mode switch as links after the first message and purpose choices', () => {
+    for (const source of ['', '&source=industry-medical']) {
+      stubBrowser({ search: '?locale=ja' + source });
+      const markup = renderApp();
+      expect(markup).toContain('href="https://cor-jp.com/contact/?source=footer-calendar#contact-calendar"');
+      expect(markup).toContain(translations.ja.introCalendarLink);
+      expect(markup).toContain('href="/contact/chat/ambassador/?locale=ja');
+      expect(markup).not.toContain('準備中');
+      expect(markup.indexOf('data-testid="cloudia-intro-panel"')).toBeGreaterThan(markup.indexOf('</fieldset>'));
+    }
+  });
+});
+
+describe('industry entry first view', () => {
+  it.each(INDUSTRY_ENTRY_SOURCES)('opens %s with its own one short question, not the generic greeting (ja)', (source) => {
+    stubBrowser({ search: `?source=${source}` });
+    const markup = renderApp();
+
+    // 最初の Cloudia 発話は、この業態専用の問い 1 つ。
+    expect(markup).toContain(industryQuestion(source, 'ja'));
+    // 汎用の挨拶・他業態の問い・契約冒頭の業態ラベル文は出さない。
+    expect(markup).not.toContain(translations.ja.welcomeMessage);
+    for (const other of INDUSTRY_ENTRY_SOURCES) {
+      if (other !== source) expect(markup, `${other} の問いが混ざっている`).not.toContain(industryQuestion(other, 'ja'));
+    }
+    expect(markup).not.toContain(industryGuidance(source).opening.ja);
+    // 冒頭の業態固有のプライバシー境界と同意 link は 1 つ残す。
+    expect(markup).toContain(industryPrivacyBoundary(source, 'ja'));
+    expect(markup).toContain('href="https://cor-jp.com/privacy/#ai-reception"');
+    expect(markup).not.toContain(translations.ja.piiNotice);
+    expect(markup).toContain(translations.ja.introCalendarLink);
+    expect(markup).toContain(translations.ja.skipChatHandoff);
+    const firstSendButton = markup.match(/<button[^>]+aria-label="送信"[^>]*>/)?.[0];
+    expect(firstSendButton).toBeDefined();
+    expect(firstSendButton).not.toContain(' disabled=""');
+    // 目的を選ぶ導線も残す。
+    expect(markup).toContain(translations.ja.intentPickerPrompt);
+  });
+
+  it.each(INDUSTRY_ENTRY_SOURCES)('opens %s with the English question and boundary in English', (source) => {
+    stubBrowser({ search: `?locale=en&source=${source}` });
+    const markup = renderApp();
+
+    expect(markup).toContain(industryQuestion(source, 'en'));
+    expect(markup).toContain(industryPrivacyBoundary(source, 'en'));
+    expect(markup).not.toContain(translations.en.welcomeMessage);
+    for (const other of INDUSTRY_ENTRY_SOURCES) {
+      if (other !== source) expect(markup, `${other} の問いが混ざっている`).not.toContain(industryQuestion(other, 'en'));
+    }
+    expect(markup).not.toContain(industryGuidance(source).opening.en);
+    expect(markup).toContain(translations.en.introCalendarLink);
+    expect(markup).toContain(translations.en.skipChatHandoff);
+  });
+
+  it('uses the English question for zh, ko, and es (existing locale fallback)', () => {
+    for (const siteLocale of ['zh', 'ko', 'es']) {
+      stubBrowser({ search: `?locale=${siteLocale}&source=industry-education` });
+      const markup = renderApp();
+      expect(markup).toContain(industryQuestion('industry-education', 'en'));
+      expect(markup).not.toContain(industryQuestion('industry-education', 'ja'));
     }
   });
 
-  it('shows the reception heading, the calendar link and the preparation line', () => {
-    stubBrowser({ search: '' });
-    const markup = renderApp();
-
-    expect(markup).toContain('ここは、Cor.株式会社の公式の AI 受付です');
-    expect(markup).toContain('href="/contact/?source=footer-calendar#contact-calendar"');
-    expect(markup).toContain('この画面からの打ち合わせの予約は、準備中です。');
-    expect(markup).toContain('href="/contact/chat/ambassador/"');
-  });
-
-  it('renders the English copy for the same panel', () => {
-    stubBrowser({ search: '?locale=en' });
-    const markup = renderApp();
-
-    expect(markup).toContain('This is the official AI reception of Cor. Inc.');
-    expect(markup).toContain('Booking a meeting from this page is in preparation.');
-  });
-
-  it('hides the preparation line when the flag is off', () => {
-    stubBrowser({ search: '' });
-    const markup = renderApp({ bookingNoticeVisible: false });
-
-    expect(markup).toContain('ここは、Cor.株式会社の公式の AI 受付です');
-    expect(markup).not.toContain('準備中');
-  });
-
-  it('shows the not-available note instead of the preparation line for an industry entry', () => {
-    stubBrowser({ search: '?source=industry-medical' });
-    const markup = renderApp();
-
-    expect(markup).not.toContain(translations.ja.introBookingPreparation);
-    expect(markup).toContain(translations.ja.unavailableExtensions);
-  });
-
-  it('keeps every bracket pair inside the intro panel balanced in Japanese and English', () => {
-    const bracketPairs: Array<[string, string]> = [
-      ['「', '」'],
-      ['『', '』'],
-      ['(', ')'],
-      ['（', '）'],
-    ];
-
-    const renderIntroPanelMarkup = (search: string) => {
+  it('keeps the generic greeting and the generic notice for the general, launcher, and poisoned entries', () => {
+    for (const search of [
+      '',
+      '?source=corsweb-launcher',
+      '?source=corsweb-contact-primary',
+      '?source=corsweb-launcher-fallback',
+      '?source=industry-medical&source=industry-shigyo',
+      '?source=industry-medical%20industry-shigyo',
+    ]) {
       stubBrowser({ search });
       const markup = renderApp();
-      const start = markup.indexOf('data-testid="cloudia-intro-panel"');
-      expect(start, 'intro panel is rendered').toBeGreaterThan(-1);
-      return markup.slice(start, markup.indexOf('</div>', start));
-    };
-
-    // 既定の受付 mode で、雑談への案内の行（introChatBefore … introChatAfter）も区画の中に出る。
-    for (const search of ['', '?locale=en']) {
-      const panel = renderIntroPanelMarkup(search);
-      for (const [open, close] of bracketPairs) {
-        const opened = panel.split(open).length - 1;
-        const closed = panel.split(close).length - 1;
-        expect(opened, `search "${search}": ${open} × ${opened} vs ${close} × ${closed}`).toBe(closed);
-      }
+      expect(markup, `search "${search}"`).toContain(translations.ja.welcomeMessage);
+      expect(markup, `search "${search}"`).toContain(translations.ja.piiNotice);
+      expect(markup, `search "${search}"`).not.toContain(industryQuestion('industry-medical', 'ja'));
+      expect(markup, `search "${search}"`).not.toContain(industryPrivacyBoundary('industry-medical', 'ja'));
+      expect(markup, `search "${search}"`).not.toContain(translations.ja.skipChatHandoff);
     }
+  });
+
+  it('keeps the ambassador greeting when an industry source opens the ambassador mode', () => {
+    stubBrowser({ search: '?mode=ambassador&source=industry-medical' });
+    const markup = renderApp();
+
+    expect(markup).toContain(translations.ja.welcomeMessageAmbassador);
+    expect(markup).not.toContain(industryQuestion('industry-medical', 'ja'));
+    expect(markup).not.toContain(translations.ja.intentPickerPrompt);
+  });
+
+  it('enables the input from the first paint with a short, clear label', () => {
+    for (const search of ['', '?source=industry-medical']) {
+      stubBrowser({ search });
+      const markup = renderApp();
+      const input = markup.match(/<input[^>]*>/)?.[0] ?? '';
+      expect(input, `search "${search}"`).not.toContain('disabled=""');
+      expect(input, `search "${search}"`).toContain('placeholder="ご相談を入力"');
+      expect(input, `search "${search}"`).toContain('aria-label="ご相談を入力"');
+    }
+  });
+
+  it('does not repeat the purpose-selection instruction in the greeting', () => {
+    expect(translations.ja.welcomeMessage).not.toContain('目的を選んでください。');
+    expect(translations.en.welcomeMessage).not.toContain('choose the purpose');
   });
 });
 
@@ -378,7 +409,7 @@ describe('return target when sessionStorage cannot be read', () => {
     vi.stubGlobal('document', { referrer: '', title: '' });
 
     const markup = renderApp();
-    expect(markup).toContain('href="/industries/medical/"');
+    expect(markup).toContain('href="https://cor-jp.com/industries/medical/"');
   });
 });
 
@@ -415,7 +446,7 @@ describe('return target persistence effect', () => {
         </FreshProvider>,
       );
 
-      expect(markup).toContain('href="/industries/medical/"');
+      expect(markup).toContain('href="https://cor-jp.com/industries/medical/"');
       expect(stale.getItem(RETURN_TARGET_STORAGE_KEY)).toBeNull();
     } finally {
       vi.doUnmock('react');
@@ -448,8 +479,8 @@ describe('App header return link recomputation', () => {
     stubBrowser({ search: '?locale=en&source=industry-medical', storage: stale });
     const markup = renderApp();
 
-    expect(markup).toContain('href="/en/industries/medical/"');
-    expect(markup).not.toContain('href="/"');
+    expect(markup).toContain('data-testid="header-return" href="https://cor-jp.com/en/industries/medical/"');
+    expect(markup).not.toContain('data-testid="header-return" href="https://cor-jp.com/"');
   });
 });
 

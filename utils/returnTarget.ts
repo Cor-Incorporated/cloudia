@@ -1,7 +1,7 @@
 import type { Locale } from '../translations';
 import { translations } from '../translations';
 import { parseEntrySourceFromSearch, type EntrySource } from '../constants/entrySources';
-import { CONTACT_PAGE_PATHS, SITE_TOP_PATHS } from '../constants/siteLinks';
+import { siteLocale, sitePrefix } from '../constants/siteLinks';
 
 /**
  * 戻る先として許す host（https のみ）。この一覧に無い host は、来た元としても
@@ -13,6 +13,7 @@ const COR_RETURN_HOSTS = ['cor-jp.com', 'www.cor-jp.com'] as const;
 
 /** chat 自身の path。referrer がこれで始まるときは、自分に戻る輪になるので使わない。 */
 const CHAT_PATH_PREFIX = '/contact/chat';
+const SITE_TOP_PATH = /^\/(?:(?:en|zh|ko|es)\/?)?$/;
 
 /** 業種の入口の source → corsweb の業種 page の slug（src/pages/industries/*.astro、[lang]/industries/[industry].astro）。 */
 const INDUSTRY_PAGE_SLUGS: Readonly<Record<string, string>> = {
@@ -34,7 +35,7 @@ export const RETURN_LINK_LABEL_KEYS: Readonly<Record<ReturnLabelKind, keyof type
 
 /**
  * 戻る先の href から、link の文の種類を決める。
- * Grift の host → Grift の文。site top（ja /・en /en/）→ Cor. のサイトの文。それ以外 → page の文。
+ * Grift・Corの各言語のトップ・その他のページを区別する。
  */
 export function classifyReturnTarget(href: string): ReturnLabelKind {
   if (/^https?:\/\//i.test(href)) {
@@ -43,7 +44,7 @@ export function classifyReturnTarget(href: string): ReturnLabelKind {
       if ((GRIFT_RETURN_HOSTS as readonly string[]).includes(url.host)) return 'grift';
       if (
         (COR_RETURN_HOSTS as readonly string[]).includes(url.host) &&
-        (url.pathname === '/' || url.pathname === '/en' || url.pathname === '/en/')
+        SITE_TOP_PATH.test(url.pathname)
       ) {
         return 'cor-site';
       }
@@ -52,7 +53,7 @@ export function classifyReturnTarget(href: string): ReturnLabelKind {
       // fall through to the relative-path handling below.
     }
   }
-  if (href === '/' || href === '/en' || href === '/en/') return 'cor-site';
+  if (SITE_TOP_PATH.test(href)) return 'cor-site';
   return 'page';
 }
 
@@ -98,8 +99,9 @@ export function entrySourceReturnHref(currentUrl: string, locale: Locale): strin
   const source: EntrySource | null = parseEntrySourceFromSearch(search);
   if (!source) return null;
   const slug = INDUSTRY_PAGE_SLUGS[source];
-  if (slug) return locale === 'en' ? `/en/industries/${slug}/` : `/industries/${slug}/`;
-  if (source === 'corsweb-contact-primary') return CONTACT_PAGE_PATHS[locale];
+  const prefix = sitePrefix(siteLocale(locale, search));
+  if (slug) return `${prefix}/industries/${slug}/`;
+  if (source === 'corsweb-contact-primary') return prefix + '/contact/';
   return null;
 }
 
@@ -142,7 +144,8 @@ export function resolveReturnTarget(
     if (validatedStored) return { href: validatedStored, save: null, clear: false };
   }
   const fromSource = entrySourceReturnHref(currentUrl, locale);
-  return { href: fromSource ?? SITE_TOP_PATHS[locale], save: null, clear: true };
+  const fallback = sitePrefix(siteLocale(locale, parseHttpUrl(currentUrl)?.search ?? '')) + '/';
+  return { href: fromSource ?? fallback, save: null, clear: true };
 }
 
 export const RETURN_TARGET_STORAGE_KEY = 'cloudia:return-target';

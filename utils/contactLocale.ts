@@ -17,12 +17,23 @@ export function contactCopyLocale(raw: unknown): Locale {
   return raw === 'ja' ? 'ja' : 'en';
 }
 
-/** The industry pages in zh, ko, and es start the two-language reception in English. */
-export function industryEntryLocale(search: string): Locale | null {
-  if (!isIndustryEntrySource(parseEntrySourceFromSearch(search))) return null;
+/** One explicit query value: ja/en stay, zh/ko/es become en, anything else is no request. */
+export function queryUiLocale(raw: unknown): Locale | null {
+  if (isContactLocale(raw)) return raw;
+  return raw === 'zh' || raw === 'ko' || raw === 'es' ? 'en' : null;
+}
+
+/** The single explicit `locale` on a query. Missing, repeated, or unknown values are no request. */
+export function queryEntryLocale(search: string): Locale | null {
   const [locale, duplicate] = new URLSearchParams(search).getAll('locale');
   if (duplicate !== undefined) return null;
-  return locale === 'zh' || locale === 'ko' || locale === 'es' ? 'en' : null;
+  return queryUiLocale(locale);
+}
+
+/** Resolve the reception language requested by a supported industry page. */
+export function industryEntryLocale(search: string): Locale | null {
+  if (!isIndustryEntrySource(parseEntrySourceFromSearch(search))) return null;
+  return queryEntryLocale(search);
 }
 
 /**
@@ -35,7 +46,8 @@ export function resolveUiLocale(input: {
   stored: string | null;
   browserLanguage: string | null;
 }): Locale {
-  if (isContactLocale(input.query)) return input.query;
+  const query = queryUiLocale(input.query);
+  if (query !== null) return query;
   if (isContactLocale(input.stored)) return input.stored;
   const browser = (input.browserLanguage ?? '').split('-')[0];
   if (isContactLocale(browser)) return browser;

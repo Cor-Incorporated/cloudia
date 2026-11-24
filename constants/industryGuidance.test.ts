@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { INDUSTRY_ENTRY_SOURCES, type IndustryEntrySource } from './entrySources';
+import { INDUSTRY_ENTRY_SOURCES, OTHER_ENTRY_SOURCES, type IndustryEntrySource } from './entrySources';
 import {
   historyHasIndustryReception,
   industryContextLine,
   industryGuidance,
   industryLabel,
   industryModelPolicy,
-  industryNotice,
+  industryPrivacyBoundary,
+  industryQuestion,
   industryReceptionMarker,
   summaryWithEntrySource,
   withIndustryContext,
@@ -42,6 +43,50 @@ const EXPECTED: Record<IndustryEntrySource, { ja: string; en: string; forbidden:
   },
 };
 
+describe('industry first-display copy (dedicated, before the Worker reply)', () => {
+  it.each(INDUSTRY_ENTRY_SOURCES)('gives %s its own question and privacy boundary in ja and en', (source) => {
+    const guidance = industryGuidance(source);
+    for (const locale of ['ja', 'en'] as const) {
+      expect(industryQuestion(source, locale)).toBe(guidance.entryQuestion[locale]);
+      expect(industryPrivacyBoundary(source, locale)).toBe(guidance.privacyBoundary[locale]);
+      if (source === 'industry-medical') {
+        expect(guidance.privacyBoundary[locale].length).toBeLessThan(guidance.opening[locale].length);
+      } else {
+        expect(guidance.opening[locale]).toContain(guidance.privacyBoundary[locale]);
+      }
+      // The question is the second line of the same contract context line.
+      expect(industryContextLine(source, locale)).toContain(guidance.question[locale]);
+      // The question itself carries no industry label and no greeting.
+      expect(guidance.question[locale]).not.toContain(guidance.label[locale]);
+      expect(industryPrivacyBoundary(source, locale)).not.toContain(guidance.label[locale]);
+    }
+  });
+
+  it('selects a different question per industry, so the first bubble is never shared', () => {
+    const jaQuestions = INDUSTRY_ENTRY_SOURCES.map((source) => industryQuestion(source, 'ja'));
+    expect(new Set(jaQuestions).size).toBe(INDUSTRY_ENTRY_SOURCES.length);
+    const enQuestions = INDUSTRY_ENTRY_SOURCES.map((source) => industryQuestion(source, 'en'));
+    expect(new Set(enQuestions).size).toBe(INDUSTRY_ENTRY_SOURCES.length);
+  });
+
+  it('keeps the general entry on generic copy and drops unknown or poisoned sources', () => {
+    for (const generic of [...OTHER_ENTRY_SOURCES, ATTACK, 'INDUSTRY-MEDICAL', null, undefined, '']) {
+      expect(industryQuestion(generic, 'ja')).toBeNull();
+      expect(industryPrivacyBoundary(generic, 'en')).toBeNull();
+    }
+  });
+
+  it('falls back to the English copy for site languages without industry copy', () => {
+    for (const siteLocale of ['zh', 'ko', 'es', 'en-US', 'fr']) {
+      expect(industryQuestion('industry-medical', siteLocale)).toBe(industryQuestion('industry-medical', 'en'));
+      expect(industryPrivacyBoundary('industry-medical', siteLocale)).toBe(
+        industryPrivacyBoundary('industry-medical', 'en'),
+      );
+    }
+    expect(industryQuestion('industry-medical', 'ja')).toBe(industryQuestion('industry-medical', 'ja'));
+  });
+});
+
 describe('industry opening', () => {
   it.each(INDUSTRY_ENTRY_SOURCES)('gives %s one question and no claim', (source) => {
     const guidance = industryGuidance(source);
@@ -75,7 +120,6 @@ describe('industry opening', () => {
 const WORKER_MEDICAL_ASSESSMENT = '医療のページから開いています。患者さんの記録、症状、個人名は書かないでください。ここでは診断も、結果の保証もしません。機密として扱う範囲を確かめる相談として、外に出せない情報の種類を、作業の名前だけで教えてください。';
 const WORKER_CONSTRUCTION = '建設のページから開いています。図面、施主名、契約書は書かないでください。工期や安全の適合は、ここでは断定しません。現場の記録、見積りの整理、社内の調べもののどれに近いご相談ですか。';
 const WORKER_SHIGYO_GENERAL = '士業のページから開いています。依頼者名や案件の中身は書かないでください。法律や税務の結論は出しません。契約書の確認、申請、期日の管理のどれに近いご相談ですか。';
-const GENERIC_START = 'ありがとうございます。ご相談内容を正確に把握するため、いくつか質問します。まず、今回実現したいことを教えてください。';
 
 describe('industry notice beside a worker first reply', () => {
   it('treats the worker sentence as the reception even when the question differs', () => {
@@ -100,64 +144,19 @@ describe('industry notice beside a worker first reply', () => {
     )).toBe(true);
   });
 
-  it('keeps one heading after the worker reply and does not drop that reply from history', () => {
+  it('preserves the worker reply without adding a second reception to history', () => {
     const thread = [
       { role: 'assistant' as const, content: 'こんにちは。' },
       { role: 'assistant' as const, content: WORKER_MEDICAL_ASSESSMENT },
     ];
-    expect(industryNotice({
-      rawSource: 'industry-medical',
-      locale: 'ja',
-      messages: thread,
-      startSettled: true,
-    })).toBe('heading');
     const outbound = withIndustryContext(thread, 'industry-medical', 'ja');
     expect(outbound.map((message) => message.content)).toEqual(thread.map((message) => message.content));
     expect(outbound.some((message) => message.content === industryContextLine('industry-medical', 'ja'))).toBe(false);
   });
 
-  it('shows the safety sentence before start, and the fallback question when the reply is generic or missing', () => {
-    const welcome = [{ sender: 'ai' as const, text: 'こんにちは。' }];
-    expect(industryNotice({
-      rawSource: 'industry-medical',
-      locale: 'ja',
-      messages: welcome,
-      startSettled: false,
-    })).toBe('boundary');
-    expect(industryNotice({
-      rawSource: 'industry-medical',
-      locale: 'ja',
-      messages: [...welcome, { sender: 'ai', text: GENERIC_START }],
-      startSettled: true,
-    })).toBe('question');
-    expect(industryNotice({
-      rawSource: 'industry-medical',
-      locale: 'ja',
-      messages: welcome,
-      startSettled: true,
-    })).toBe('question');
-    expect(industryNotice({
-      rawSource: 'corsweb-launcher',
-      locale: 'ja',
-      messages: welcome,
-      startSettled: true,
-    })).toBe('none');
-    expect(industryNotice({
-      rawSource: 'corsweb-launcher-fallback',
-      locale: 'ja',
-      messages: [...welcome, { sender: 'ai', text: GENERIC_START }],
-      startSettled: true,
-    })).toBe('none');
-  });
-
   it('does not treat the visitor repeating the sentence as the reception', () => {
     const marker = industryReceptionMarker('industry-education', 'en') ?? '';
-    expect(industryNotice({
-      rawSource: 'industry-education',
-      locale: 'zh',
-      messages: [{ role: 'user', content: marker }],
-      startSettled: false,
-    })).toBe('boundary');
+    expect(historyHasIndustryReception([{ role: 'user', content: marker }], 'industry-education', 'zh')).toBe(false);
     expect(industryReceptionMarker('industry-education', 'es')).toBe('You opened this from the education page.');
   });
 });

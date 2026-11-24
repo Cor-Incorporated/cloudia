@@ -37,6 +37,13 @@ export interface IndustryGuidance {
   label: Record<Locale, string>;
   opening: Record<Locale, string>;
   question: Record<Locale, string>;
+  entryQuestion: Record<Locale, string>;
+  /**
+   * The industry privacy and scope limits from the contract opening, condensed for medical.
+   * Shown at the head of the screen before the Worker's first reply exists.
+   * The reception contract fixture pins `opening` and `question`, not this.
+   */
+  privacyBoundary: Record<Locale, string>;
 }
 
 const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
@@ -51,6 +58,14 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
       ja: '紹介状の下書きや看護サマリーの整理など、まず、どんなことをしたいとお考えですか。',
       en: 'To start, what would you like to do, for example drafting referral letters or organizing nursing summaries?',
     },
+    entryQuestion: {
+      ja: '院内業務のご相談を伺います。紹介状や看護記録など、どの作業でお困りですか？',
+      en: 'I can help with healthcare workflows. What task is difficult, such as referral letters or nursing records?',
+    },
+    privacyBoundary: {
+      ja: '患者情報や認証情報は入力しないでください。診断は行いません。',
+      en: 'Do not enter patient data or login details. This chat cannot diagnose.',
+    },
   },
   'industry-shigyo': {
     source: 'industry-shigyo',
@@ -62,6 +77,14 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
     question: {
       ja: '顧問先への回答案づくりや案件資料の整理など、まず、どんなことをしたいとお考えですか。',
       en: 'To start, what would you like to do, for example drafting answers for client companies or organizing case documents?',
+    },
+    entryQuestion: {
+      ja: '士業の業務相談を伺います。回答案づくりや案件資料など、何を効率化したいですか？',
+      en: 'I can help with professional practice workflows. What would you streamline, such as drafting replies or organizing case files?',
+    },
+    privacyBoundary: {
+      ja: '顧問先・依頼者の実データや認証情報は書かないでください。法律や税務の結論は出しません。',
+      en: 'Do not write real data about your clients or login credentials. This chat does not give a legal or tax conclusion.',
     },
   },
   'industry-construction': {
@@ -75,6 +98,14 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
       ja: '現場から届く報告の転記や書類の下書きなど、まず、どんなことをしたいとお考えですか。',
       en: 'To start, what would you like to do, for example transcribing reports from the site or drafting documents?',
     },
+    entryQuestion: {
+      ja: '建設現場の業務相談を伺います。現場報告の転記や書類作成など、どこに手間がかかっていますか？',
+      en: 'I can help with construction workflows. What takes time, such as transferring site reports or preparing documents?',
+    },
+    privacyBoundary: {
+      ja: '現場の実データや機密資料を書く必要はありません。工期や安全の適合は、ここでは断定しません。',
+      en: 'There is no need to write real site data or confidential documents. This chat does not confirm a schedule or a safety approval.',
+    },
   },
   'industry-manufacturing': {
     source: 'industry-manufacturing',
@@ -87,6 +118,14 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
       ja: '日報や、次の担当者へ残したい作業の手がかりなど、まず、どんなことをしたいとお考えですか。',
       en: 'To start, what would you like to do, for example daily reports or the clues you want to leave for the next person on a task?',
     },
+    entryQuestion: {
+      ja: '製造現場の業務相談を伺います。日報や作業の引き継ぎなど、どの作業を見直したいですか？',
+      en: 'I can help with manufacturing workflows. What would you improve, such as daily reports or shift handovers?',
+    },
+    privacyBoundary: {
+      ja: '現場の実データや機密資料を書く必要はありません。品質や歩留まりの改善は、ここでは断定しません。',
+      en: 'There is no need to write real shop-floor data or confidential documents. This chat does not promise a quality or yield result.',
+    },
   },
   'industry-education': {
     source: 'industry-education',
@@ -98,6 +137,14 @@ const GUIDANCE: Record<IndustryEntrySource, IndustryGuidance> = {
     question: {
       ja: '学内の資料の検索や教務システムへの転記など、まず、どんなことをしたいとお考えですか。',
       en: 'To start, what would you like to do, for example searching school documents or transcribing into the academic system?',
+    },
+    entryQuestion: {
+      ja: '学校業務のご相談を伺います。学内資料の検索や教務システムへの転記など、どこに手間がかかっていますか？',
+      en: 'I can help with school workflows. What takes time, such as finding school documents or transferring records?',
+    },
+    privacyBoundary: {
+      ja: '学生・生徒の実データ、機密資料、認証情報は書かないでください。学習効果は、ここでは断定しません。',
+      en: 'Do not write real student data, confidential documents, or login credentials. This chat does not promise a learning outcome.',
     },
   },
 };
@@ -122,6 +169,29 @@ export function industryOpening(raw: unknown, locale: Locale | string): string |
   const entry = parseEntrySourceValue(raw);
   if (!isIndustryEntrySource(entry)) return null;
   return industryGuidance(entry).opening[contactCopyLocale(locale)];
+}
+
+/**
+ * The one industry-specific question, as the first Cloudia utterance before
+ * the Worker's first reply exists. Dedicated first-display copy: the Worker
+ * still writes its own reception (opening plus question) when the conversation
+ * starts, and that contract is unchanged. Null unless `raw` is an industry enum.
+ */
+export function industryQuestion(raw: unknown, locale: Locale | string): string | null {
+  const entry = parseEntrySourceValue(raw);
+  if (!isIndustryEntrySource(entry)) return null;
+  return industryGuidance(entry).entryQuestion[contactCopyLocale(locale)];
+}
+
+/**
+ * The industry privacy and scope limits (patients, clients,
+ * students, site data), shown at the head of the screen before the Worker's
+ * first reply exists. Null unless `raw` is an industry enum.
+ */
+export function industryPrivacyBoundary(raw: unknown, locale: Locale | string): string | null {
+  const entry = parseEntrySourceValue(raw);
+  if (!isIndustryEntrySource(entry)) return null;
+  return industryGuidance(entry).privacyBoundary[contactCopyLocale(locale)];
 }
 
 /**
@@ -188,24 +258,6 @@ export function historyHasIndustryReception(
   const marker = industryReceptionMarker(rawSource, locale);
   if (!marker) return false;
   return messages.some((message) => messageRole(message) === 'assistant' && messageText(message).includes(marker));
-}
-
-/**
- * What the industry panel may add beside the thread.
- * - heading: the short label. The first reply already contains the reception.
- * - boundary: the safety sentence, before a first reply exists.
- * - question: the one fallback question, when the first reply is missing or generic.
- * - none: this entry is not an industry.
- */
-export function industryNotice(input: {
-  rawSource: unknown;
-  locale: Locale | string;
-  messages: readonly IndustryThreadMessage[];
-  startSettled: boolean;
-}): 'none' | 'heading' | 'boundary' | 'question' {
-  if (!industryContextLine(input.rawSource, input.locale)) return 'none';
-  if (historyHasIndustryReception(input.messages, input.rawSource, input.locale)) return 'heading';
-  return input.startSettled ? 'question' : 'boundary';
 }
 
 /**

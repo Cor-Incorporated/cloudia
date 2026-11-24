@@ -33,7 +33,7 @@ describe('IntentPicker', () => {
     const markup = renderPicker();
 
     expect(markup).toContain('<fieldset');
-    expect(markup).toContain('ご相談の目的を選んでください');
+    expect(markup).toContain('ご相談を入力するか、目的を選べます');
     expect((markup.match(/aria-pressed=/g) ?? []).length).toBe(5);
     expect(markup).toContain('min-h-11');
     expect(markup).toContain('Griftについて相談したい');

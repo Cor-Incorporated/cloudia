@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { ChatPlaceholderKey } from '../utils/chatView';
 
 interface ChatInputProps {
   onSendMessage: (text: string) => void;
   isLoading: boolean;
+  canSend?: boolean;
+  describedBy?: string;
   disabled?: boolean;
   inputRef?: React.RefObject<HTMLInputElement | null>;
   placeholderKey?: ChatPlaceholderKey;
@@ -13,17 +15,20 @@ interface ChatInputProps {
 const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   isLoading,
+  canSend = true,
+  describedBy,
   disabled = false,
   inputRef,
   placeholderKey = 'typeYourMessage',
 }) => {
   const [inputText, setInputText] = useState('');
+  const composing = useRef(false);
   const { t } = useLanguage();
   const placeholder = t(placeholderKey);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || isLoading || disabled) return;
+    if (composing.current || !inputText.trim() || isLoading || disabled || !canSend) return;
     onSendMessage(inputText);
     setInputText('');
   };
@@ -37,14 +42,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
         type="text"
         value={inputText}
         onChange={(e) => setInputText(e.target.value)}
+        onCompositionStart={() => { composing.current = true; }}
+        onCompositionEnd={() => { composing.current = false; }}
         placeholder={placeholder}
-        className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-shadow placeholder:text-slate-400 focus:border-navy focus:ring-2 focus:ring-navy/20 disabled:cursor-not-allowed disabled:bg-slate-100"
+        className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-500 bg-white px-3 py-2 text-base text-slate-900 outline-none transition-shadow placeholder:text-slate-500 focus:border-navy focus:ring-2 focus:ring-navy/20 disabled:cursor-not-allowed disabled:bg-slate-100"
         disabled={isDisabled}
         aria-label={placeholder}
+        aria-describedby={describedBy}
       />
       <button
         type="submit"
-        disabled={isDisabled}
+        aria-label={t('sendMessage')}
+        disabled={isDisabled || !canSend}
         className="min-h-11 shrink-0 rounded-xl bg-navy px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:cursor-not-allowed disabled:bg-slate-300"
       >
         {isLoading ? (

@@ -1,26 +1,26 @@
 import type { Locale } from '../translations';
+import type { SiteChromeLocale } from './siteChrome';
 
-/**
- * corsweb の site top の言語別 path（constants/privacy.ts の PRIVACY_POLICY_PATHS と同じ書き方）。
- * ja はルート直下、en は /en/ の下（corsweb の src/pages/index.astro と src/pages/en/index.astro）。
- */
-export const SITE_TOP_PATHS: Readonly<Record<Locale, string>> = {
-  en: '/en/',
-  ja: '/',
-};
+export function companyPageHref(target: string): string {
+  return target.startsWith('/') ? 'https://cor-jp.com' + target : target;
+}
 
-/** corsweb の問い合わせ page の言語別 path。 */
-export const CONTACT_PAGE_PATHS: Readonly<Record<Locale, string>> = {
-  en: '/en/contact/',
-  ja: '/contact/',
-};
+/** Preserve the originating site language when its conversation uses English. */
+export function siteLocale(uiLocale: Locale, search: string): SiteChromeLocale {
+  const values = new URLSearchParams(search).getAll('locale');
+  const requested = values.length === 1 ? values[0] : null;
+  if (uiLocale === 'en' && (requested === 'zh' || requested === 'ko' || requested === 'es')) return requested;
+  return uiLocale;
+}
 
-/**
- * 問い合わせ page のカレンダーの区画への link。corsweb の src/config/site.ts の
- * getContactCalendarUrl（CONTACT_CALENDAR_SOURCE = 'footer-calendar'、
- * CONTACT_CALENDAR_ANCHOR = 'contact-calendar'）と同じ形。
- * カレンダーの区画は /contact/ page の下に在る（Calendar.astro の section id）。
- */
-export function contactCalendarHref(locale: Locale): string {
-  return `${CONTACT_PAGE_PATHS[locale]}?source=footer-calendar#contact-calendar`;
+export function sitePrefix(locale: SiteChromeLocale): string {
+  return locale === 'ja' ? '' : '/' + locale;
+}
+
+export function contactCalendarHref(locale: Locale, search: string): string {
+  return companyPageHref(sitePrefix(siteLocale(locale, search)) + '/contact/?source=footer-calendar#contact-calendar');
+}
+
+export function materialRequestHref(locale: Locale, search: string): string {
+  return companyPageHref(sitePrefix(siteLocale(locale, search)) + '/contact/materials/');
 }

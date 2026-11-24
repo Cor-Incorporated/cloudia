@@ -29,6 +29,22 @@ describe('resolveReturnTarget', () => {
     expect(classifyReturnTarget(resolveReturnTarget('https://www.griftai.org/', CHAT_URL, 'en', null).href)).toBe('grift');
   });
 
+  it.each(['zh', 'ko', 'es'])('returns a direct industry visitor to the original %s page after switching modes', (language) => {
+    const query = '?locale=' + language + '&source=industry-medical';
+    const referrer = 'https://cor-jp.com/contact/chat/ambassador/' + query;
+    expect(resolveReturnTarget(referrer, CHAT_URL + query, 'en', null).href).toBe('/' + language + '/industries/medical/');
+    expect(resolveReturnTarget(null, CHAT_URL + '?locale=' + language + '&source=corsweb-contact-primary', 'en', null).href).toBe('/' + language + '/contact/');
+    expect(resolveReturnTarget(null, CHAT_URL + '?locale=' + language, 'en', null).href).toBe('/' + language + '/');
+    expect(classifyReturnTarget('/' + language + '/')).toBe('cor-site');
+  });
+
+  it('uses the active chat language for ambiguous or unsupported site languages', () => {
+    for (const query of ['locale=es&locale=zh', 'locale=zz']) {
+      expect(entrySourceReturnHref(CHAT_URL + '?' + query + '&source=industry-medical', 'en')).toBe('/en/industries/medical/');
+    }
+    expect(entrySourceReturnHref(CHAT_URL + '?locale=es&source=industry-medical', 'ja')).toBe('/industries/medical/');
+  });
+
   it('falls back to the site top when the referrer host is not allow-listed or not https', () => {
     const href = (referrer: string) => resolveReturnTarget(referrer, CHAT_URL, 'ja', null).href;
     expect(href('https://example.com/page/')).toBe('/');

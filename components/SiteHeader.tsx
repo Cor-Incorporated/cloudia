@@ -13,6 +13,7 @@ interface SiteHeaderProps {
   onSelectLocale: (locale: Locale) => void;
   /** 開発中の mock の表示（今まで題の下に出していた物）。 */
   showMockBadge?: boolean;
+  contentHasHeading?: boolean;
 }
 
 /**
@@ -28,8 +29,10 @@ const SiteHeader: React.FC<SiteHeaderProps> = ({
   locale,
   onSelectLocale,
   showMockBadge = false,
+  contentHasHeading = false,
 }) => {
   const { t } = useLanguage();
+  const Title = contentHasHeading ? 'p' : 'h1';
 
   return (
     <header
@@ -41,9 +44,9 @@ const SiteHeader: React.FC<SiteHeaderProps> = ({
           <ExpressionAvatar emotion={emotion} size={40} compact />
         </div>
         <div className="min-w-0">
-          <h1 className="sr-only text-base font-semibold text-stone-900 lg:not-sr-only lg:truncate">
+          <Title className="sr-only text-base font-semibold text-stone-900 lg:not-sr-only lg:truncate">
             {t('title')}
-          </h1>
+          </Title>
           {showMockBadge && (
             <p className="hidden text-xs text-amber-700 lg:block">contact-chat MOCK</p>
           )}
@@ -59,11 +62,13 @@ const SiteHeader: React.FC<SiteHeaderProps> = ({
           <a
             data-testid="header-return"
             href={returnHref}
+            aria-label={returnLabel}
             title={returnLabel}
             className="inline-flex min-h-11 min-w-11 items-center justify-center overflow-hidden rounded-full border border-navy px-2 text-sm font-semibold text-navy no-underline hover:bg-navy/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy lg:px-3.5"
           >
             <span aria-hidden="true" className="shrink-0">←</span>
-            <span className="ml-1.5 min-w-0 truncate">{returnLabel}</span>
+            <span aria-hidden="true" className="ml-1.5 whitespace-nowrap lg:hidden">{t('backShort')}</span>
+            <span aria-hidden="true" className="ml-1.5 hidden min-w-0 truncate lg:inline">{returnLabel}</span>
           </a>
         )}
         <LanguageSwitch locale={locale} onSelectLocale={onSelectLocale} />

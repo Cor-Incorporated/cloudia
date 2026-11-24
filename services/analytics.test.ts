@@ -72,17 +72,37 @@ describe('sanitizePageLocation', () => {
     );
   });
 
-  it('keeps an industry source when the locale is not ja or en, and does not keep that locale', () => {
-    expect(sanitizePageLocation(
+  it('preserves the English reception across a reload from a supported industry locale', () => {
+    for (const locale of ['zh', 'ko', 'es']) {
+      const url = sanitizePageLocation(
+        'https://cor-jp.com',
+        '/contact/chat/',
+        `?locale=${locale}&source=industry-medical&email=taro%40example.com`,
+      );
+      expect(url).toBe('https://cor-jp.com/contact/chat/?source=industry-medical&locale=en');
+      expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', new URL(url).search)).toBe(url);
+    }
+  });
+
+  it.each([
+    ['?locale=zh-CN&source=industry-education', '?source=industry-education'],
+    ['?locale=zh&locale=ko&source=industry-education', '?source=industry-education'],
+    ['?locale=zh&source=industry-medical&source=industry-education', '?locale=en'],
+    ['?locale=zh&locale=ko&source=industry-medical&source=industry-education', ''],
+  ])('rejects invalid industry locale inputs %s', (search, expected) => {
+    expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', search)).toBe(
+      `https://cor-jp.com/contact/chat/${expected}`,
+    );
+  });
+
+  it.each(['zh', 'ko', 'es'])('keeps English for a general launcher entry %s across a reload', (locale) => {
+    const url = sanitizePageLocation(
       'https://cor-jp.com',
       '/contact/chat/',
-      '?locale=zh&source=industry-medical&email=taro%40example.com',
-    )).toBe('https://cor-jp.com/contact/chat/?source=industry-medical');
-    for (const locale of ['ko', 'es', 'zh-CN']) {
-      expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', `?locale=${locale}&source=industry-education`)).toBe(
-        'https://cor-jp.com/contact/chat/?source=industry-education',
-      );
-    }
+      `?locale=${locale}&source=corsweb-launcher&email=taro%40example.com`,
+    );
+    expect(url).toBe('https://cor-jp.com/contact/chat/?source=corsweb-launcher&locale=en');
+    expect(sanitizePageLocation('https://cor-jp.com', '/contact/chat/', new URL(url).search)).toBe(url);
   });
 
   it('drops an unknown, mismatched, repeated, or personal source without writing it back', () => {

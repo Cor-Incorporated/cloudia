@@ -16,7 +16,6 @@ const RECEPTION_KEYS = [
   'handoffEmail',
   'handoffSubmit',
   'skipChatHandoff',
-  'unavailableExtensions',
   'fallbackNotice',
   'retry',
   'aiError',
@@ -47,12 +46,26 @@ describe('contact locales', () => {
     expect(resolveUiLocale({ query, stored: null, browserLanguage: query })).toBe('en');
   });
 
-  it('keeps an exact ja or en query, and a stored or browser ja, ahead of an unsupported query', () => {
+  it('keeps an exact ja or en query, and a stored or browser ja, ahead of an unknown query', () => {
     expect(resolveUiLocale({ query: 'ja', stored: 'en', browserLanguage: 'zh-CN' })).toBe('ja');
     expect(resolveUiLocale({ query: 'en', stored: 'ja', browserLanguage: 'ko' })).toBe('en');
-    expect(resolveUiLocale({ query: 'zh', stored: 'ja', browserLanguage: 'es' })).toBe('ja');
-    expect(resolveUiLocale({ query: 'ko', stored: null, browserLanguage: 'ja-JP' })).toBe('ja');
+    expect(resolveUiLocale({ query: 'zh', stored: 'ja', browserLanguage: 'es' })).toBe('en');
+    expect(resolveUiLocale({ query: 'ko', stored: null, browserLanguage: 'ja-JP' })).toBe('en');
     expect(resolveUiLocale({ query: null, stored: 'en', browserLanguage: 'zh' })).toBe('en');
+  });
+
+  it.each(['zh', 'ko', 'es'] as const)(
+    'maps an explicit %s to English on general footer, header, launcher and direct entry in Japanese Chrome',
+    (query) => {
+      expect(resolveUiLocale({ query, stored: 'ja', browserLanguage: 'ja-JP' })).toBe('en');
+      expect(resolveUiLocale({ query, stored: null, browserLanguage: 'ja' })).toBe('en');
+      expect(resolveUiLocale({ query, stored: 'en', browserLanguage: 'ja-JP' })).toBe('en');
+    },
+  );
+
+  it('leaves an unknown query on the existing stored/browser fallback', () => {
+    expect(resolveUiLocale({ query: 'fr', stored: 'ja', browserLanguage: 'ja-JP' })).toBe('ja');
+    expect(resolveUiLocale({ query: 'zh-CN', stored: 'ja', browserLanguage: 'ja-JP' })).toBe('ja');
   });
 
   it('shows English industry guidance, purpose choices, and the contact form for zh, ko, and es', () => {
@@ -77,7 +90,6 @@ describe('contact locales', () => {
         expect(label.length).toBeGreaterThan(1);
       }
       expect(showDirectHandoff(path())).toBe(true);
-      expect(translations[locale].unavailableExtensions).toContain('not available');
     }
   });
 
@@ -110,9 +122,11 @@ describe('industry reception locale before URL sanitization', () => {
     }
   });
 
+  it.each(['ja', 'en'])('honors the explicit %s reception language', (locale) => {
+    expect(industryEntryLocale(`?source=industry-medical&locale=${locale}`)).toBe(locale);
+  });
+
   it.each([
-    '?source=industry-medical&locale=ja',
-    '?source=industry-medical&locale=en',
     '?source=industry-medical&locale=zh-CN',
     '?source=industry-medical&locale=ko&locale=ja',
     '?source=industry-medical&source=industry-shigyo&locale=zh',

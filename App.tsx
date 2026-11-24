@@ -3,8 +3,11 @@ import { v4 as uuidv4 } from 'uuid';
 import ChatInput from './components/ChatInput';
 import ChatMessage from './components/ChatMessage';
 import ExpressionAvatar from './components/ExpressionAvatar';
+import ContractorInquiryPanel from './components/ContractorInquiryPanel';
+import { companyPageHref, materialRequestHref } from './constants/siteLinks';
 import IntentPicker from './components/IntentPicker';
 import PiiNotice from './components/PiiNotice';
+import PrivacyPolicyLink from './components/PrivacyPolicyLink';
 import IntroPanel from './components/IntroPanel';
 import SiteHeader from './components/SiteHeader';
 import SiteFooterBar from './components/SiteFooterBar';
@@ -14,7 +17,7 @@ import FaqResolutionPrompt from './components/FaqResolutionPrompt';
 import { Message, Emotion, ContactIntent, AppMode } from './types';
 import { useLanguage } from './contexts/LanguageContext';
 import { resolveAppMode } from './utils/appMode';
-import { chatPlaceholderKey, handoffSuccessMessage, messageListScrollTarget, showNewConversation } from './utils/chatView';
+import { chatPlaceholderKey, displayThread, handoffSuccessMessage, messageListScrollTarget, showNewConversation } from './utils/chatView';
 import {
   classifyReturnTarget,
   persistReturnTarget,
@@ -23,11 +26,10 @@ import {
   RETURN_LINK_LABEL_KEYS,
   safeSessionStorage,
 } from './utils/returnTarget';
-import { INTRO_BOOKING_NOTICE_VISIBLE } from './constants/introPanel';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import { parseEntrySourceFromSearch } from './constants/entrySources';
-import { industryContextLine, industryLabel, industryNotice, industryOpening } from './constants/industryGuidance';
-import { showDirectHandoff, showIndustryEntryPanel, showReadyHandoff } from './utils/inquiryPath';
+import { historyHasIndustryReception, industryLabel, industryOpening, industryPrivacyBoundary, industryQuestion } from './constants/industryGuidance';
+import { showDirectHandoff, showReadyHandoff } from './utils/inquiryPath';
 import {
   isContactChatMock,
   postContactChat,
@@ -37,10 +39,27 @@ import {
   type StructuredLead,
   type ChatResult,
 } from './services/contactChatClient';
+import { translations } from './translations';
 import { submitContactInquiry } from './services/submitWithAnalytics';
 
 // Classification re-export helper
 type Classif = ApiClassification;
+
+// Match the visible action in either UI language as well as common request-only replies.
+const handoffLabels = Object.values(translations).map((copy) => copy.showHandoff.toLowerCase());
+const japaneseHandoff = /^(?:(?:お?問い合わせ(?:を?し)?|(?:担当(?:者|の方)?|スタッフ)に(?:相談|連絡)し)たい(?:です)?|(?:担当(?:者)?への)?(?:相談|問い合わせ)(?:を希望(?:します)?|希望))$/;
+const englishHandoff = /^i (?:want|would like) to (?:contact (?:you|the team)|make an inquiry|speak (?:with|to) (?:someone|a representative))$/;
+
+function isHandoffRequest(text: string): boolean {
+  const phrase = text.trim().replace(/[。.!！]+$/, '').toLowerCase();
+  return handoffLabels.includes(phrase) || japaneseHandoff.test(phrase) || englishHandoff.test(phrase);
+}
+
+function usableHandoffSummary(value: string): boolean {
+  const summary = value.trim();
+  return Boolean(summary) && !/^(?:要約未生成|Summary unavailable)/i.test(summary) &&
+    !isHandoffRequest(summary);
+}
 
 const EMPTY_HANDOFF_VALUES: HandoffValues = {
   name: '',
@@ -93,12 +112,7 @@ function isFaqFullyResolved(result: ChatResult): boolean {
   return result.faqResolution === 'answered';
 }
 
-interface AppProps {
-  /** 説明の区画の「準備中」の行の旗（既定は constants/introPanel.ts の旗）。 */
-  bookingNoticeVisible?: boolean;
-}
-
-const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_VISIBLE }) => {
+const App: React.FC = () => {
   const { locale, setLocale, t } = useLanguage();
   const appMode: AppMode = useMemo(() => resolveAppMode(), []);
   const embedMode = useMemo(() => {
@@ -118,7 +132,8 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
       readStoredReturnTarget(safeSessionStorage()),
     );
   }, [embedMode, locale]);
-  const returnHref = returnDecision?.href ?? null;
+  const siteSearch = typeof window === 'undefined' ? '' : window.location.search;
+  const returnHref = returnDecision ? companyPageHref(returnDecision.href) : null;
   const returnLabelKind = returnHref ? classifyReturnTarget(returnHref) : null;
   const returnLabelKey = returnLabelKind ? RETURN_LINK_LABEL_KEYS[returnLabelKind] : null;
 
@@ -127,7 +142,16 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
     persistReturnTarget(returnDecision, safeSessionStorage());
   }, [returnDecision]);
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  // 初回描画から最初の吹き出しを出す（effects が走らない静的描画・埋込初回でも空画面にしない）。
+  // text は常に汎用の挨拶。業態入口の専用コピーへの差し替えは描画時（displayThread）のみ。
+  const [messages, setMessages] = useState<Message[]>(() => [
+    {
+      id: uuidv4(),
+      text: t(appMode === 'ambassador' ? 'welcomeMessageAmbassador' : 'welcomeMessage'),
+      sender: 'ai',
+      emotion: Emotion.ENJOYING,
+    },
+  ]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentEmotion, setCurrentEmotion] = useState<Emotion>(Emotion.ENJOYING);
   const [selectedIntent, setSelectedIntent] = useState<ContactIntent | null>(() => {
@@ -139,9 +163,10 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
     if (typeof window === 'undefined') return null;
     return parseEntrySourceFromSearch(window.location.search);
   }, []);
-  const industryLine = industryContextLine(entrySource, locale);
-  const industryLead = industryOpening(entrySource, locale);
-  const industryName = industryLabel(entrySource, locale);
+  // 見出しと最初の問いは画面表示専用。messages と API への送信内容は変えない。
+  const industryQuestionText = appMode === 'intake' ? industryQuestion(entrySource, locale) : null;
+  const industryName = industryQuestionText ? industryLabel(entrySource, locale) : null;
+  const industryBoundaryText = appMode === 'intake' ? industryPrivacyBoundary(entrySource, locale) : null;
   const [sessionId, setSessionId] = useState<string | null>(() => readSessionId(appMode, locale, selectedIntent));
   const idempotencyKeyRef = useRef(uuidv4());
   const initialIntentFromUrlRef = useRef(selectedIntent);
@@ -149,12 +174,17 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
   const startAttemptRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const handoffEntryRef = useRef<HTMLButtonElement>(null);
+  const returnToHandoffEntryRef = useRef(false);
   const [intentStartState, setIntentStartState] = useState<'idle' | 'starting' | 'started'>('idle');
   const [readyForContact, setReadyForContact] = useState(false);
   const [showHandoff, setShowHandoff] = useState(false);
+  const [handoffFailed, setHandoffFailed] = useState(false);
   const [handoffDraft, setHandoffDraft] = useState<HandoffValues>(EMPTY_HANDOFF_VALUES);
   const [conversationSummary, setConversationSummary] = useState('');
   const [structuredLead, setStructuredLead] = useState<StructuredLead>({});
+  const [contractorDraft, setContractorDraft] = useState<HandoffValues>(EMPTY_HANDOFF_VALUES);
+  const [contractorInquiry, setContractorInquiry] = useState(false);
   const [classification, setClassification] = useState<Classif>('genuine');
   const [apiDegraded, setApiDegraded] = useState(false);
   const [lastFailedInput, setLastFailedInput] = useState<string | null>(null);
@@ -176,7 +206,9 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
     setCurrentEmotion(Emotion.ENJOYING);
     setReadyForContact(false);
     setShowHandoff(false);
+    setHandoffFailed(false);
     setHandoffDraft(EMPTY_HANDOFF_VALUES);
+    setContractorDraft(EMPTY_HANDOFF_VALUES);
     setConversationSummary('');
     setStructuredLead({});
     setSubmitted(false);
@@ -201,6 +233,12 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
     if (!chatReady || isLoading) return;
     inputRef.current?.focus();
   }, [chatReady, isLoading]);
+
+  useEffect(() => {
+    if (showHandoff || !returnToHandoffEntryRef.current) return;
+    returnToHandoffEntryRef.current = false;
+    handoffEntryRef.current?.focus();
+  }, [showHandoff]);
 
   useEffect(() => {
     const list = listRef.current;
@@ -351,17 +389,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
   const handleSendMessage = useCallback(async (inputText: string, retrying = false) => {
     if (!inputText.trim() || submitted) return;
 
-    if (appMode === 'intake' && (!selectedIntent || !chatReady)) {
-      const notice: Message = {
-        id: uuidv4(),
-        text: t('selectIntentFirst'),
-        sender: 'ai',
-        emotion: Emotion.SHY,
-      };
-      setMessages((prev) => [...prev, notice]);
-      setCurrentEmotion(Emotion.SHY);
-      return;
-    }
+    if (requestAbortRef.current) return;
 
     const newUserMessage: Message = { id: uuidv4(), text: inputText, sender: 'user' };
     const nextMessages = retrying ? messages : [...messages, newUserMessage];
@@ -384,10 +412,18 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
         setSessionId(result.sessionId);
         rememberSessionId(appMode, locale, selectedIntent, result.sessionId);
       }
-      if (result.summary) setConversationSummary(result.summary);
+      const { summary } = result;
+      if (summary) {
+        setConversationSummary((current) =>
+          industryName && isHandoffRequest(inputText) && usableHandoffSummary(current)
+            ? current
+            : summary,
+        );
+      }
       if (result.structuredLead) setStructuredLead(result.structuredLead);
       setLastFailedInput(null);
       setApiDegraded(false);
+      if (appMode === 'intake') setIntentStartState('started');
       setClassification(result.classification);
       if (result.readyForContact) {
         setReadyForContact(true);
@@ -407,15 +443,11 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
       if (controller.signal.aborted || isAbortError(error)) return;
       setLastFailedInput(inputText);
       setApiDegraded(true);
-      setMessages((prev) => [
-        ...prev,
-        { id: uuidv4(), text: t('aiError'), sender: 'ai', emotion: Emotion.SAD },
-      ]);
       setCurrentEmotion(Emotion.SAD);
     } finally {
       finishRequest(controller);
     }
-  }, [applyFaqResolutionFromResult, beginRequest, chatReady, entrySource, finishRequest, messages, locale, t, appMode, selectedIntent, submitted, sessionId]);
+  }, [applyFaqResolutionFromResult, beginRequest, entrySource, finishRequest, industryName, messages, locale, appMode, selectedIntent, submitted, sessionId]);
 
   const handleRetryChat = useCallback(() => {
     if (lastFailedInput) void handleSendMessage(lastFailedInput, true);
@@ -438,6 +470,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
     }
 
     handleStopRequest();
+    setHandoffFailed(false);
     forgetSessionId(appMode, locale, selectedIntent);
     setSelectedIntent(null);
     setSessionId(null);
@@ -451,8 +484,10 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
     setReadyForContact(false);
     setShowHandoff(false);
     setHandoffDraft(EMPTY_HANDOFF_VALUES);
+    setContractorDraft(EMPTY_HANDOFF_VALUES);
     setConversationSummary('');
     setStructuredLead({});
+    setContractorInquiry(false);
     setClassification('genuine');
     setApiDegraded(false);
     setLastFailedInput(null);
@@ -473,20 +508,36 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
   }, [appMode, handleStopRequest, locale, messages.length, selectedIntent, submitted, t]);
 
   const handleHandoff = useCallback(async (values: HandoffValues) => {
-    if (submitLockRef.current || submitted) return;
+    if (submitLockRef.current || submitted || !values.message.trim()) return;
     submitLockRef.current = true;
+    setHandoffFailed(false);
     const controller = beginRequest('submit');
-    const handoffMessage = values.message.trim() || conversationSummary.trim() || t('handoffDefaultMessage');
     try {
+      let submissionSessionId = sessionId;
+      // The Worker derives the industry from its stored session when it accepts an inquiry.
+      if (!submissionSessionId && industryName && !isContactChatMock()) {
+        const started = await postContactChatStart([], {
+          mode: appMode,
+          locale,
+          intent: selectedIntent,
+          sessionId: null,
+          entrySource,
+        }, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (!started.sessionId) throw new Error('Contact session was not created');
+        submissionSessionId = started.sessionId;
+        setSessionId(submissionSessionId);
+      }
+      const lead = contractorInquiry ? { ...structuredLead, contactReason: '既存契約の相談' } : structuredLead;
       const submitResult = await submitContactInquiry({
-        sessionId,
+        sessionId: submissionSessionId,
         idempotencyKey: idempotencyKeyRef.current,
         name: values.name,
         email: values.email,
         company: values.company,
-        message: handoffMessage,
-        summaryText: conversationSummary,
-        structuredLead,
+        message: values.message.trim(),
+        summaryText: industryName ? values.message.trim() : conversationSummary,
+        structuredLead: industryName ? undefined : lead,
         classification,
         intent: selectedIntent,
         entrySource,
@@ -495,6 +546,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
       if (controller.signal.aborted) return;
       setLastFailedInput(null);
       setHandoffDraft(EMPTY_HANDOFF_VALUES);
+      setContractorDraft(EMPTY_HANDOFF_VALUES);
       setSubmitted(true);
       setShowHandoff(false);
       const success = handoffSuccessMessage(submitResult.receiptId);
@@ -506,22 +558,13 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
       setApiDegraded(false);
     } catch (error) {
       if (controller.signal.aborted || isAbortError(error)) return;
-      setApiDegraded(true);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uuidv4(),
-          text: t('aiError'),
-          sender: 'ai',
-          emotion: Emotion.SAD,
-        },
-      ]);
+      setHandoffFailed(true);
       setCurrentEmotion(Emotion.SAD);
     } finally {
       submitLockRef.current = false;
       finishRequest(controller);
     }
-  }, [beginRequest, conversationSummary, entrySource, finishRequest, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
+  }, [appMode, beginRequest, conversationSummary, contractorInquiry, entrySource, finishRequest, industryName, locale, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
 
   const displayEmotion = isLoading ? Emotion.THINKING : currentEmotion;
   const pathInput = {
@@ -534,17 +577,59 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
     classification,
   };
   const readyHandoffVisible = showReadyHandoff(pathInput);
-  const directHandoffVisible = showDirectHandoff(pathInput);
-  const industryEntryPanelVisible = showIndustryEntryPanel({ ...pathInput, industryEntry: Boolean(industryName) });
-  const notice = industryNotice({
-    rawSource: entrySource,
-    locale,
-    messages,
-    startSettled: intentStartState === 'started' || apiDegraded,
+  const directHandoffVisible = showDirectHandoff(pathInput) && (Boolean(industryQuestionText) || messages.length > 1 || apiDegraded);
+  const openHandoff = () => {
+    setContractorInquiry(false);
+    const userMessages = messages.filter((message) => message.sender === 'user').reverse();
+    const lastUserText = userMessages[0]?.text ?? '';
+    const summary = conversationSummary.trim();
+    const canUseSummary = industryName
+      ? usableHandoffSummary(summary) && (readyForContact ||
+        (classification === 'genuine' && userMessages.length > 0))
+      : readyForContact;
+    const fallback = industryName && isHandoffRequest(lastUserText)
+      ? userMessages.find((message) => !isHandoffRequest(message.text))?.text ?? lastUserText
+      : lastUserText;
+    setHandoffDraft((draft) => ({
+      ...draft,
+      message: draft.message || (canUseSummary ? summary : '') || fallback,
+    }));
+    setShowHandoff(true);
+  };
+  const openContractorHandoff = () => {
+    setContractorInquiry(true);
+    setContractorDraft((draft) => ({
+      ...draft,
+      message: draft.message || t('contractorInquiryPrefill'),
+    }));
+    setShowHandoff(true);
+  };
+  // 一般の入口では来訪者が自分で選ぶ。流入タグを契約の有無の判定には使わない。
+  const contractorEntryVisible =
+    appMode === 'intake' &&
+    !industryQuestionText &&
+    !selectedIntent &&
+    intentStartState !== 'started' &&
+    !submitted &&
+    !showHandoff &&
+    messages.length === 1;
+  const materialsEntryVisible =
+    appMode === 'intake' &&
+    !industryQuestionText &&
+    intentStartState !== 'started' &&
+    !submitted &&
+    !showHandoff;
+  const thread = displayThread(messages, {
+    openingText: industryQuestionText,
+    dropOpening: intentStartState === 'started' && historyHasIndustryReception(messages, entrySource, locale),
   });
+  const showOpeningPrivacy = thread[0]?.id === messages[0]?.id;
+  const medicalWorkerOpening = entrySource === 'industry-medical' && !showOpeningPrivacy
+    ? industryOpening(entrySource, locale)
+    : null;
   const shellClass = embedMode
-    ? 'flex h-dvh min-h-[520px] w-full overflow-hidden bg-stone-50 text-slate-900'
-    : 'flex h-dvh min-h-dvh overflow-hidden bg-stone-50 text-slate-900';
+    ? 'flex h-dvh min-h-0 w-full overflow-hidden bg-white text-slate-900'
+    : 'flex h-dvh min-h-dvh overflow-hidden bg-white text-slate-900';
 
   return (
     <div className={`${shellClass} flex-col`} data-embed={embedMode ? 'true' : 'false'}>
@@ -555,6 +640,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
           returnLabel={returnHref && returnLabelKey ? t(returnLabelKey) : null}
           locale={locale}
           onSelectLocale={setLocale}
+          contentHasHeading={Boolean(industryName) || showHandoff}
           showMockBadge={isContactChatMock() && appMode === 'intake'}
         />
       )}
@@ -570,7 +656,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
         <section
           className={`mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col bg-white shadow-sm ${showHandoff ? 'overflow-y-auto' : 'overflow-hidden'}`}
         >
-          {showNewConversation({ selectedIntent, messageCount: messages.length, submitted }) && (
+          {!showHandoff && showNewConversation({ selectedIntent, messageCount: messages.length, submitted }) && (
             <div
               data-testid="conversation-actions"
               className="flex min-h-11 shrink-0 items-center justify-end px-3 pt-1"
@@ -585,18 +671,7 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
             </div>
           )}
 
-          <FallbackNotice
-            visible={apiDegraded}
-            onRetry={
-              intentStartState === 'idle' && selectedIntent
-                ? handleRetryStart
-                : lastFailedInput
-                  ? handleRetryChat
-                : undefined
-            }
-          />
-
-          {isLoading && activeRequest && (
+          {isLoading && activeRequest && !showHandoff && (
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2 text-xs text-slate-500" role="status">
               <span>{t('thinking')}</span>
               <button
@@ -611,39 +686,64 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
 
           <div
             ref={listRef}
-            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-stone-50 p-3 custom-scrollbar sm:p-5"
+            className={`${showHandoff ? 'hidden' : 'flex'} min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-white p-3 custom-scrollbar sm:p-5`}
             aria-live="polite"
             aria-relevant="additions"
             aria-busy={isLoading}
             role="log"
           >
-            <IntroPanel
-              mode={appMode}
-              modeSwitchHref={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
-              calendarTarget={embedMode ? '_top' : undefined}
-              bookingNoticeVisible={bookingNoticeVisible && !industryEntryPanelVisible}
-            />
-            {messages.map((msg, index) => (
+            {industryName && (
+              <h1 className="text-balance text-lg font-semibold leading-tight text-slate-950 sm:text-2xl">
+                {t('industryConsultationTitle', { industry: industryName })}
+              </h1>
+            )}
+            {thread.map((msg, index) => (
               <React.Fragment key={msg.id}>
-                <ChatMessage message={msg} plainText />
-                {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState !== 'started' && (
-                  <div className="ml-10 mt-1 max-w-2xl rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-                    <IntentPicker
-                      selected={selectedIntent}
-                      onSelect={handleSelectIntent}
-                      disabled={isLoading || submitted || intentStartState === 'starting'}
-                      describedBy="cloudia-pii-note"
-                    />
-                    <div id="cloudia-pii-note" className="mt-3">
-                      <PiiNotice />
+                {industryQuestionText && index === 0 && msg.text === industryQuestionText ? (
+                  <p className="text-pretty text-base leading-relaxed text-slate-800">{msg.text}</p>
+                ) : (
+                  <ChatMessage
+                    message={medicalWorkerOpening && msg.sender === 'ai' && industryBoundaryText
+                      ? { ...msg, text: msg.text.replace(medicalWorkerOpening, industryBoundaryText) }
+                      : msg}
+                    plainText
+                  />
+                )}
+                {appMode === 'intake' && index === 0 && msg.id === messages[0]?.id && (
+                  <div className="mt-2 max-w-2xl space-y-3">
+                    <div id="cloudia-pii-note">
+                      <PiiNotice note={industryBoundaryText ?? undefined} compact={entrySource === 'industry-medical'} />
                     </div>
+                    {contractorEntryVisible && (
+                      <ContractorInquiryPanel
+                        buttonRef={handoffEntryRef}
+                        onInquire={openContractorHandoff}
+                        disabled={isLoading || intentStartState === 'starting'}
+                      />
+                    )}
+                    {messages.length === 1 && (
+                      <IntentPicker
+                        selected={selectedIntent}
+                        onSelect={handleSelectIntent}
+                        disabled={isLoading || submitted || intentStartState === 'starting'}
+                        describedBy="cloudia-pii-note"
+                      />
+                    )}
                   </div>
                 )}
                 {appMode === 'intake' && index === 0 && msg.sender === 'ai' && intentStartState === 'started' && selectedIntent && (
-                  <p className="ml-10 mt-0.5 max-w-2xl text-xs text-slate-500" role="status">
+                  <p className="ml-10 mt-0.5 max-w-2xl text-xs text-slate-600" role="status">
                     {t('intentSelected', { label: getIntentDisplayLabel(selectedIntent, locale) })}
-                    {industryName ? ` / ${t('industryContextLabel', { label: industryName })}` : ''}
                   </p>
+                )}
+                {index === 0 && msg.sender === 'ai' && !showHandoff && !submitted && (appMode !== 'intake' || intentStartState !== 'started') && (
+                  <IntroPanel
+                    mode={appMode}
+                    modeSwitchHref={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
+                    siteSearch={siteSearch}
+                    calendarTarget={embedMode ? '_top' : undefined}
+                    materialsHref={materialsEntryVisible ? materialRequestHref(locale, siteSearch) : undefined}
+                  />
                 )}
               </React.Fragment>
             ))}
@@ -671,9 +771,10 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
               <p className="text-xs leading-relaxed text-slate-600">{t('readyForContact')}</p>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button
+                  ref={handoffEntryRef}
                   type="button"
                   className="min-h-11 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
-                  onClick={() => setShowHandoff(true)}
+                  onClick={openHandoff}
                 >
                   {t('showHandoff')}
                 </button>
@@ -690,10 +791,15 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
 
           {showHandoff && !submitted && (
             <HandoffForm
-              values={handoffDraft}
-              onChange={setHandoffDraft}
+              values={contractorInquiry ? contractorDraft : handoffDraft}
+              onChange={contractorInquiry ? setContractorDraft : setHandoffDraft}
               disabled={isLoading}
-              onBack={() => setShowHandoff(false)}
+              submitFailed={handoffFailed}
+              onBack={() => {
+                returnToHandoffEntryRef.current = true;
+                setHandoffFailed(false);
+                setShowHandoff(false);
+              }}
               onCancel={handleStartNewConversation}
               onSubmit={handleHandoff}
             />
@@ -723,44 +829,46 @@ const App: React.FC<AppProps> = ({ bookingNoticeVisible = INTRO_BOOKING_NOTICE_V
             </div>
           )}
 
-          {industryEntryPanelVisible && (
-            <div className="shrink-0 space-y-2 border-t border-slate-200 bg-white px-4 py-3">
-              {notice === 'boundary' && industryLead && (
-                <p className="max-w-2xl text-sm leading-relaxed text-slate-800" role="note">{industryLead}</p>
-              )}
-              {notice === 'question' && industryLine && (
-                <div className="max-w-2xl space-y-1" role="note">
-                  {industryLine.split('\n').map((paragraph) => (
-                    <p key={paragraph} className="text-sm leading-relaxed text-slate-800">{paragraph}</p>
-                  ))}
-                </div>
-              )}
-              {notice !== 'none' && industryName && (
-                <p className="text-xs text-slate-500" role="status">{t('industryContextLabel', { label: industryName })}</p>
-              )}
-              <p className="text-xs leading-relaxed text-slate-500">{t('unavailableExtensions')}</p>
-              {directHandoffVisible && (
-                <button
-                  type="button"
-                  onClick={() => setShowHandoff(true)}
-                  disabled={isLoading}
-                  className="min-h-11 text-left text-sm font-medium text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:text-slate-400"
-                >
-                  {t('skipChatHandoff')}
-                </button>
-              )}
+          <FallbackNotice
+            visible={apiDegraded && !showHandoff}
+            onRetry={
+              intentStartState === 'idle' && selectedIntent
+                ? handleRetryStart
+                : lastFailedInput
+                  ? handleRetryChat
+                  : undefined
+            }
+          />
+
+          {directHandoffVisible && (
+            <div className="flex shrink-0 items-center border-t border-slate-200 bg-white px-3 sm:px-5">
+              <button
+                ref={handoffEntryRef}
+                type="button"
+                onClick={openHandoff}
+                disabled={isLoading}
+                className="min-h-11 text-left text-sm font-medium text-navy underline underline-offset-2 hover:text-navy-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy disabled:text-slate-400"
+              >
+                {t(messages.length > 1 ? 'showHandoff' : 'skipChatHandoff')}
+              </button>
             </div>
           )}
 
-          {!showHandoff && !submitted && !faqResolved && (
-            <div className="sticky bottom-0 shrink-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:p-4">
+          {!submitted && !faqResolved && (
+            <div hidden={showHandoff} className="shrink-0 border-t border-slate-200 bg-white px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-4">
               <ChatInput
+                key={idempotencyKeyRef.current}
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}
-                disabled={!chatReady}
+                describedBy={appMode === 'intake' ? showOpeningPrivacy ? 'cloudia-pii-note' : 'cloudia-chat-privacy' : undefined}
                 inputRef={inputRef}
-                placeholderKey={chatPlaceholderKey(appMode, chatReady, isLoading, selectedIntent)}
+                placeholderKey={chatPlaceholderKey(appMode)}
               />
+              {appMode === 'intake' && !showOpeningPrivacy && (
+                <p id="cloudia-chat-privacy" className="mt-1 text-xs text-slate-600">
+                  <PrivacyPolicyLink label={t('chatPrivacyReminder')} />
+                </p>
+              )}
             </div>
           )}
         </section>

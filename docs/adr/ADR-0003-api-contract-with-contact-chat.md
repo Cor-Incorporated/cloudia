@@ -16,9 +16,12 @@ corsweb `workers/contact-chat`（本番は同一オリジン `cor-jp.com/api/con
 
 | Method | Path | 用途 | PII |
 |---|---|---|---|
-| POST | `/api/contact/chat` | 会話・分類。構造化ヒアリング | **要求・保存しない** |
-| POST | `/api/contact/submit` | 氏名・メール等の確定送信 | メール本文のみ。**LLM に渡さない** |
+| POST | `/api/contact/chat` | 会話・分類。目的の選択前から自由文を送れる | **要求しない** |
+| POST | `/api/contact/chat/start` | 初期質問と受付セッションの作成。モデル呼び出しなし | なし |
+| POST | `/api/contact/submit` | 確認した用件と連絡先の確定送信 | **LLM に渡さない** |
 | GET | `/api/contact/health` | 死活 | なし |
+
+5業種からの確定送信では `shareConversation: false` を指定する。本人が確定した用件・連絡先を渡し、担当者への通知や受付記録にそれ以前の要約・受け答えを転記しない。この指定を解釈する中央Workerを先に配備する。
 
 ### クライアント方針
 
@@ -26,6 +29,8 @@ corsweb `workers/contact-chat`（本番は同一オリジン `cor-jp.com/api/con
 2. 表示上の `reply` は **textContent のみ**（XSS 防止。Markdown HTML 化しない）。
 3. 最終形は handoff リダイレクトのみにしない。**Cloudia 内で送信完了**まで行う。
 4. 障害時は corsweb 最小フォーム / 電話へフォールバック。
+5. 目的未選択の初回は `intent: null` で `/chat` に送る。後続の会話と受付には返された `sessionId` を渡す。
+6. 業態別の直接フォームでは、利用者が用件を確認し、連絡先の扱いに同意した後、空の会話で `/chat/start` を呼び、得られた `sessionId` を `/submit` に渡す。Worker はセッションから受付の業種を決める。
 
 ### 現行 Worker レスポンス（chat）
 
