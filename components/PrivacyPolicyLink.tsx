@@ -22,7 +22,7 @@ const PrivacyPolicyLink: React.FC<PrivacyPolicyLinkProps> = ({ className, label 
         href={privacyPolicyHref(locale, search)}
         target="_blank"
         rel="noopener noreferrer"
-        className="underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+        className="inline-flex min-h-11 items-center py-1 underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
       >
         {label ?? t('privacyLinkText')}
         <span className="sr-only">{t('privacyLinkNewTab')}</span>
