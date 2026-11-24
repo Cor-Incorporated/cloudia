@@ -61,7 +61,7 @@ describe('App header return link (outside the embed frame)', () => {
     stubBrowser({ search: '' });
     const markup = renderApp();
 
-    expect(markup).toContain('href="/"');
+    expect(markup).toContain('href="https://cor-jp.com/"');
     expect(markup).toContain('Cor. のサイトに戻る');
     // 戻る link の文字の 1 本だけ（絵は link にしない）。省略に備えて title にも同じ全文を置く。
     expect(markup.match(/>Cor\. のサイトに戻る<\/span>/g)).toHaveLength(1);
@@ -72,7 +72,7 @@ describe('App header return link (outside the embed frame)', () => {
     stubBrowser({ search: '?locale=en' });
     const markup = renderApp();
 
-    expect(markup).toContain('href="/en/"');
+    expect(markup).toContain('href="https://cor-jp.com/en/"');
     expect(markup).toContain('Back to the Cor. site');
   });
 
@@ -100,7 +100,7 @@ describe('App header return link (outside the embed frame)', () => {
     const headerStart = markup.indexOf('<header id="app-header"');
     expect(headerStart).toBeGreaterThan(-1);
     const header = markup.slice(headerStart, markup.indexOf('</header>', headerStart));
-    expect(header.match(/href="\/industries\/medical\/"/g) ?? []).toHaveLength(1);
+    expect(header.match(/href="https:\/\/cor-jp\.com\/industries\/medical\/"/g) ?? []).toHaveLength(1);
   });
 });
 
@@ -267,16 +267,22 @@ describe('App embed mode', () => {
     expect(markup).not.toContain('app-header');
     expect(markup).not.toContain('のサイトに戻る');
     expect(markup).toContain(translations.ja.welcomeMessage);
-    expect(markup).toContain('href="/contact/?source=footer-calendar#contact-calendar" target="_top"');
+    expect(markup).toContain('href="https://cor-jp.com/contact/?source=footer-calendar#contact-calendar" target="_top"');
   });
 });
 
 describe('reception links', () => {
+  it.each(['zh', 'ko', 'es'])('opens the calendar in the original %s site language', (lang) => {
+    stubBrowser({ search: '?source=industry-medical&embed=1&locale=' + lang });
+    const markup = renderApp();
+    expect(markup).toContain('href="https://cor-jp.com/' + lang + '/contact/?source=footer-calendar#contact-calendar" target="_top"');
+  });
+
   it('offers booking availability and the mode switch as links after the first message and purpose choices', () => {
     for (const source of ['', '&source=industry-medical']) {
       stubBrowser({ search: '?locale=ja' + source });
       const markup = renderApp();
-      expect(markup).toContain('href="/contact/?source=footer-calendar#contact-calendar"');
+      expect(markup).toContain('href="https://cor-jp.com/contact/?source=footer-calendar#contact-calendar"');
       expect(markup).toContain(translations.ja.introCalendarLink);
       expect(markup).toContain('href="/contact/chat/ambassador/?locale=ja');
       expect(markup).not.toContain('準備中');
@@ -300,7 +306,7 @@ describe('industry entry first view', () => {
     expect(markup).not.toContain(industryGuidance(source).opening.ja);
     // 冒頭の業態固有のプライバシー境界と同意 link は 1 つ残す。
     expect(markup).toContain(industryPrivacyBoundary(source, 'ja'));
-    expect(markup).toContain('href="/privacy/#ai-reception"');
+    expect(markup).toContain('href="https://cor-jp.com/privacy/#ai-reception"');
     expect(markup).not.toContain(translations.ja.piiNotice);
     expect(markup).toContain(translations.ja.introCalendarLink);
     expect(markup).toContain(translations.ja.skipChatHandoff);
@@ -403,7 +409,7 @@ describe('return target when sessionStorage cannot be read', () => {
     vi.stubGlobal('document', { referrer: '', title: '' });
 
     const markup = renderApp();
-    expect(markup).toContain('href="/industries/medical/"');
+    expect(markup).toContain('href="https://cor-jp.com/industries/medical/"');
   });
 });
 
@@ -440,7 +446,7 @@ describe('return target persistence effect', () => {
         </FreshProvider>,
       );
 
-      expect(markup).toContain('href="/industries/medical/"');
+      expect(markup).toContain('href="https://cor-jp.com/industries/medical/"');
       expect(stale.getItem(RETURN_TARGET_STORAGE_KEY)).toBeNull();
     } finally {
       vi.doUnmock('react');
@@ -473,8 +479,8 @@ describe('App header return link recomputation', () => {
     stubBrowser({ search: '?locale=en&source=industry-medical', storage: stale });
     const markup = renderApp();
 
-    expect(markup).toContain('href="/en/industries/medical/"');
-    expect(markup).not.toContain('href="/"');
+    expect(markup).toContain('data-testid="header-return" href="https://cor-jp.com/en/industries/medical/"');
+    expect(markup).not.toContain('data-testid="header-return" href="https://cor-jp.com/"');
   });
 });
 

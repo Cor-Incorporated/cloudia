@@ -28,7 +28,7 @@ describe('PiiNotice', () => {
     const markup = renderNotice('ja-JP');
 
     expect(markup).toContain(translations.ja.piiNotice);
-    expect(markup).toContain('href="/privacy/#ai-reception"');
+    expect(markup).toContain('href="https://cor-jp.com/privacy/#ai-reception"');
     expect(markup).toContain('個人情報の取扱いについては');
     expect(markup).toMatch(/>プライバシーポリシー<span class="sr-only">（新しいタブで開きます）<\/span><\/a>をご確認ください。/);
   });
@@ -37,13 +37,13 @@ describe('PiiNotice', () => {
     const markup = renderNotice('en-US');
 
     expect(markup).toContain(translations.en.piiNotice);
-    expect(markup).toContain('href="/en/privacy/#ai-reception"');
+    expect(markup).toContain('href="https://cor-jp.com/en/privacy/#ai-reception"');
     expect(markup).toMatch(/>Privacy Policy<span class="sr-only"> \(opens in a new tab\)<\/span><\/a>\./);
   });
 
   it('opens the policy in a new tab without giving it the opener', () => {
     const markup = renderNotice('ja-JP');
 
-    expect(markup).toMatch(/<a href="\/privacy\/#ai-reception" target="_blank" rel="noopener noreferrer"/);
+    expect(markup).toMatch(/<a href="https:\/\/cor-jp\.com\/privacy\/#ai-reception" target="_blank" rel="noopener noreferrer"/);
   });
 });

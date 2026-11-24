@@ -20,8 +20,11 @@ export const LanguageProvider = ({
   const entryLocale = useRef(initialLocale).current;
   // Attempt to get language from localStorage or default to browser language or 'en'
   const getInitialLocale = (): Locale => {
-    return entryLocale ?? resolveUiLocale({
-      query: new URLSearchParams(window.location.search).get('locale'),
+    if (entryLocale) return entryLocale;
+    // A repeated `locale` is ambiguous, so it is treated as no explicit request.
+    const [query, duplicate] = new URLSearchParams(window.location.search).getAll('locale');
+    return resolveUiLocale({
+      query: duplicate === undefined ? query : null,
       stored: localStorage.getItem('app-locale'),
       browserLanguage: navigator.language,
     });

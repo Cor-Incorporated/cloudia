@@ -37,7 +37,7 @@ const SiteFooterBar: React.FC<SiteFooterBarProps> = ({ currentSite = 'cloudia', 
               key={link.id}
               href={link.href}
               rel="noopener"
-              className="inline-flex min-h-6 items-center text-stone-900 no-underline hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+              className="inline-flex min-h-11 items-center py-2 text-stone-900 no-underline hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
             >
               {link.label}
             </a>
@@ -57,7 +57,7 @@ const SiteFooterBar: React.FC<SiteFooterBarProps> = ({ currentSite = 'cloudia', 
                 href={site.href}
                 rel="noopener"
                 aria-current={current ? 'page' : undefined}
-                className={`inline-flex min-h-6 items-center no-underline hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy ${
+                className={`inline-flex min-h-11 min-w-11 items-center justify-center px-2 py-2 no-underline hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy ${
                   current ? 'font-bold text-stone-900' : 'text-stone-600'
                 }`}
               >

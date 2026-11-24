@@ -79,12 +79,29 @@ const HandoffForm: React.FC<HandoffFormProps> = ({ values, onChange, disabled, s
         <>
           <p className="text-pretty text-base leading-relaxed text-slate-700">
             {t('handoffHint')}
-            <PrivacyPolicyLink className="mt-1 inline-flex min-h-6 items-center" label={t('privacyLinkText')} />
+            <PrivacyPolicyLink className="mt-1 inline-flex min-h-11 items-center" label={t('privacyLinkText')} />
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="space-y-1 text-sm font-medium text-slate-700">
               <span>{t('handoffName')}</span>
-              <input ref={nameInput} className={field} value={values.name} onChange={(e) => update('name', e.target.value)} required disabled={disabled} autoComplete="name" />
+              <input
+                ref={nameInput}
+                className={field}
+                value={values.name}
+                required
+                pattern={'.*\\S.*'}
+                disabled={disabled}
+                autoComplete="name"
+                onInvalid={(event) => {
+                  if (!event.currentTarget.value.trim()) {
+                    event.currentTarget.setCustomValidity(t('handoffNameMissing'));
+                  }
+                }}
+                onChange={(event) => {
+                  event.currentTarget.setCustomValidity('');
+                  update('name', event.currentTarget.value);
+                }}
+              />
             </label>
             <label className="space-y-1 text-sm font-medium text-slate-700">
               <span>{t('handoffEmail')}</span>

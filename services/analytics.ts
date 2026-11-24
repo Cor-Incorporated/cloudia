@@ -25,7 +25,7 @@ import { parseEntrySourceFromSearch, type EntrySource } from '../constants/entry
 import { parseContactIntent } from '../constants/intents';
 import type { ContactIntent } from '../types';
 import { resolveAppMode } from '../utils/appMode';
-import { industryEntryLocale, isContactLocale } from '../utils/contactLocale';
+import { isContactLocale, queryEntryLocale } from '../utils/contactLocale';
 import { RECEIPT_ID_PATTERN, type SubmitResult } from './contactChatClient';
 
 export const CONTACT_CHAT_VIEW_EVENT = 'contact_chat_view';
@@ -119,7 +119,7 @@ export function allowedParams(search: string): AnalyticsParams {
  */
 export function allowedQuery(search: string): string {
   const params = allowedParams(search);
-  const locale = industryEntryLocale(search) ?? new URLSearchParams(search).get('locale');
+  const locale = queryEntryLocale(search);
   const pairs: [string, string][] = [];
   if (params.intent) pairs.push(['intent', params.intent]);
   // The URL key stays `source`. The event parameter is `entry_source`.

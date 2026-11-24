@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import ChatInput from './components/ChatInput';
 import ChatMessage from './components/ChatMessage';
 import ExpressionAvatar from './components/ExpressionAvatar';
+import ContractorInquiryPanel from './components/ContractorInquiryPanel';
+import { companyPageHref, materialRequestHref } from './constants/siteLinks';
 import IntentPicker from './components/IntentPicker';
 import PiiNotice from './components/PiiNotice';
 import PrivacyPolicyLink from './components/PrivacyPolicyLink';
@@ -130,7 +132,8 @@ const App: React.FC = () => {
       readStoredReturnTarget(safeSessionStorage()),
     );
   }, [embedMode, locale]);
-  const returnHref = returnDecision?.href ?? null;
+  const siteSearch = typeof window === 'undefined' ? '' : window.location.search;
+  const returnHref = returnDecision ? companyPageHref(returnDecision.href) : null;
   const returnLabelKind = returnHref ? classifyReturnTarget(returnHref) : null;
   const returnLabelKey = returnLabelKind ? RETURN_LINK_LABEL_KEYS[returnLabelKind] : null;
 
@@ -180,6 +183,8 @@ const App: React.FC = () => {
   const [handoffDraft, setHandoffDraft] = useState<HandoffValues>(EMPTY_HANDOFF_VALUES);
   const [conversationSummary, setConversationSummary] = useState('');
   const [structuredLead, setStructuredLead] = useState<StructuredLead>({});
+  const [contractorDraft, setContractorDraft] = useState<HandoffValues>(EMPTY_HANDOFF_VALUES);
+  const [contractorInquiry, setContractorInquiry] = useState(false);
   const [classification, setClassification] = useState<Classif>('genuine');
   const [apiDegraded, setApiDegraded] = useState(false);
   const [lastFailedInput, setLastFailedInput] = useState<string | null>(null);
@@ -203,6 +208,7 @@ const App: React.FC = () => {
     setShowHandoff(false);
     setHandoffFailed(false);
     setHandoffDraft(EMPTY_HANDOFF_VALUES);
+    setContractorDraft(EMPTY_HANDOFF_VALUES);
     setConversationSummary('');
     setStructuredLead({});
     setSubmitted(false);
@@ -478,8 +484,10 @@ const App: React.FC = () => {
     setReadyForContact(false);
     setShowHandoff(false);
     setHandoffDraft(EMPTY_HANDOFF_VALUES);
+    setContractorDraft(EMPTY_HANDOFF_VALUES);
     setConversationSummary('');
     setStructuredLead({});
+    setContractorInquiry(false);
     setClassification('genuine');
     setApiDegraded(false);
     setLastFailedInput(null);
@@ -520,6 +528,7 @@ const App: React.FC = () => {
         submissionSessionId = started.sessionId;
         setSessionId(submissionSessionId);
       }
+      const lead = contractorInquiry ? { ...structuredLead, contactReason: '既存契約の相談' } : structuredLead;
       const submitResult = await submitContactInquiry({
         sessionId: submissionSessionId,
         idempotencyKey: idempotencyKeyRef.current,
@@ -528,7 +537,7 @@ const App: React.FC = () => {
         company: values.company,
         message: values.message.trim(),
         summaryText: industryName ? values.message.trim() : conversationSummary,
-        structuredLead: industryName ? undefined : structuredLead,
+        structuredLead: industryName ? undefined : lead,
         classification,
         intent: selectedIntent,
         entrySource,
@@ -537,6 +546,7 @@ const App: React.FC = () => {
       if (controller.signal.aborted) return;
       setLastFailedInput(null);
       setHandoffDraft(EMPTY_HANDOFF_VALUES);
+      setContractorDraft(EMPTY_HANDOFF_VALUES);
       setSubmitted(true);
       setShowHandoff(false);
       const success = handoffSuccessMessage(submitResult.receiptId);
@@ -554,7 +564,7 @@ const App: React.FC = () => {
       submitLockRef.current = false;
       finishRequest(controller);
     }
-  }, [appMode, beginRequest, conversationSummary, entrySource, finishRequest, industryName, locale, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
+  }, [appMode, beginRequest, conversationSummary, contractorInquiry, entrySource, finishRequest, industryName, locale, selectedIntent, structuredLead, classification, sessionId, submitted, t]);
 
   const displayEmotion = isLoading ? Emotion.THINKING : currentEmotion;
   const pathInput = {
@@ -569,6 +579,7 @@ const App: React.FC = () => {
   const readyHandoffVisible = showReadyHandoff(pathInput);
   const directHandoffVisible = showDirectHandoff(pathInput) && (Boolean(industryQuestionText) || messages.length > 1 || apiDegraded);
   const openHandoff = () => {
+    setContractorInquiry(false);
     const userMessages = messages.filter((message) => message.sender === 'user').reverse();
     const lastUserText = userMessages[0]?.text ?? '';
     const summary = conversationSummary.trim();
@@ -585,6 +596,29 @@ const App: React.FC = () => {
     }));
     setShowHandoff(true);
   };
+  const openContractorHandoff = () => {
+    setContractorInquiry(true);
+    setContractorDraft((draft) => ({
+      ...draft,
+      message: draft.message || t('contractorInquiryPrefill'),
+    }));
+    setShowHandoff(true);
+  };
+  // 一般の入口では来訪者が自分で選ぶ。流入タグを契約の有無の判定には使わない。
+  const contractorEntryVisible =
+    appMode === 'intake' &&
+    !industryQuestionText &&
+    !selectedIntent &&
+    intentStartState !== 'started' &&
+    !submitted &&
+    !showHandoff &&
+    messages.length === 1;
+  const materialsEntryVisible =
+    appMode === 'intake' &&
+    !industryQuestionText &&
+    intentStartState !== 'started' &&
+    !submitted &&
+    !showHandoff;
   const thread = displayThread(messages, {
     openingText: industryQuestionText,
     dropOpening: intentStartState === 'started' && historyHasIndustryReception(messages, entrySource, locale),
@@ -680,6 +714,13 @@ const App: React.FC = () => {
                     <div id="cloudia-pii-note">
                       <PiiNotice note={industryBoundaryText ?? undefined} compact={entrySource === 'industry-medical'} />
                     </div>
+                    {contractorEntryVisible && (
+                      <ContractorInquiryPanel
+                        buttonRef={handoffEntryRef}
+                        onInquire={openContractorHandoff}
+                        disabled={isLoading || intentStartState === 'starting'}
+                      />
+                    )}
                     {messages.length === 1 && (
                       <IntentPicker
                         selected={selectedIntent}
@@ -699,7 +740,9 @@ const App: React.FC = () => {
                   <IntroPanel
                     mode={appMode}
                     modeSwitchHref={buildModeHref(appMode === 'ambassador' ? null : 'ambassador')}
+                    siteSearch={siteSearch}
                     calendarTarget={embedMode ? '_top' : undefined}
+                    materialsHref={materialsEntryVisible ? materialRequestHref(locale, siteSearch) : undefined}
                   />
                 )}
               </React.Fragment>
@@ -748,8 +791,8 @@ const App: React.FC = () => {
 
           {showHandoff && !submitted && (
             <HandoffForm
-              values={handoffDraft}
-              onChange={setHandoffDraft}
+              values={contractorInquiry ? contractorDraft : handoffDraft}
+              onChange={contractorInquiry ? setContractorDraft : setHandoffDraft}
               disabled={isLoading}
               submitFailed={handoffFailed}
               onBack={() => {
