@@ -31,6 +31,7 @@ import { parseEntrySourceFromSearch } from './constants/entrySources';
 import { historyHasIndustryReception, industryLabel, industryOpening, industryPrivacyBoundary, industryQuestion } from './constants/industryGuidance';
 import { showDirectHandoff, showReadyHandoff } from './utils/inquiryPath';
 import {
+  INITIAL_ENTRY_ROUTE,
   isContactChatMock,
   postContactChat,
   postContactChatStart,
@@ -69,7 +70,9 @@ const EMPTY_HANDOFF_VALUES: HandoffValues = {
 };
 
 function sessionStorageKey(mode: AppMode, locale: string, intent: ContactIntent | null): string {
-  return `cloudia:contact-session:${mode}:${locale}:${intent ?? 'none'}`;
+  const key = `cloudia:contact-session:${mode}:${locale}:${intent ?? 'none'}`;
+  // Keep the established direct key and resume Grift sessions within their own route.
+  return INITIAL_ENTRY_ROUTE === 'griftaiLink' ? `${key}:grift` : key;
 }
 
 function readSessionId(mode: AppMode, locale: string, intent: ContactIntent | null): string | null {
