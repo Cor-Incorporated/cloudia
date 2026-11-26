@@ -28,9 +28,11 @@ import {
 } from './utils/returnTarget';
 import { getIntentDisplayLabel, parseContactIntent } from './constants/intents';
 import { parseEntrySourceFromSearch } from './constants/entrySources';
+import { contactSessionKey } from './constants/contactEntryRoute';
 import { historyHasIndustryReception, industryLabel, industryOpening, industryPrivacyBoundary, industryQuestion } from './constants/industryGuidance';
 import { showDirectHandoff, showReadyHandoff } from './utils/inquiryPath';
 import {
+  INITIAL_ENTRY_ROUTE,
   isContactChatMock,
   postContactChat,
   postContactChatStart,
@@ -69,7 +71,7 @@ const EMPTY_HANDOFF_VALUES: HandoffValues = {
 };
 
 function sessionStorageKey(mode: AppMode, locale: string, intent: ContactIntent | null): string {
-  return `cloudia:contact-session:${mode}:${locale}:${intent ?? 'none'}`;
+  return contactSessionKey(`cloudia:contact-session:${mode}:${locale}:${intent ?? 'none'}`, INITIAL_ENTRY_ROUTE);
 }
 
 function readSessionId(mode: AppMode, locale: string, intent: ContactIntent | null): string | null {

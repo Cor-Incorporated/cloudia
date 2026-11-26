@@ -6,6 +6,7 @@ import type { AppMode, ContactIntent } from '../types';
 import type { Locale } from '../translations';
 import { isIndustryEntrySource, parseEntrySourceValue, type EntrySource } from '../constants/entrySources';
 import { parseContactIntent } from '../constants/intents';
+import { readContactEntryRoute } from '../constants/contactEntryRoute';
 import { summaryWithEntrySource, withIndustryContext } from '../constants/industryGuidance';
 
 export type ChatRole = 'user' | 'assistant';
@@ -45,6 +46,9 @@ export interface ChatResult {
 
 /** Sent when the page has no allow-listed entry source. Not taken from the query. */
 export const CLIENT_SOURCE = 'cloudia';
+
+// Capture the entry before analytics normalizes or drops query parameters.
+export const INITIAL_ENTRY_ROUTE = readContactEntryRoute(typeof window === 'undefined' ? '' : window.location.search);
 
 export type ChatTrafficSource = EntrySource | typeof CLIENT_SOURCE;
 
@@ -267,6 +271,7 @@ export async function postContactChat(
       locale: normalizedContext.locale,
       intent: normalizedContext.intent,
       source: normalizedContext.source,
+      entryRoute: INITIAL_ENTRY_ROUTE,
       ...(normalizedContext.sessionId ? { sessionId: normalizedContext.sessionId } : {}),
       ...(normalizedContext.turnstileToken ? { turnstileToken: normalizedContext.turnstileToken } : {}),
     }),
@@ -317,6 +322,7 @@ export async function postContactChatStart(
       locale: normalizedContext.locale,
       intent: normalizedContext.intent,
       source: normalizedContext.source,
+      entryRoute: INITIAL_ENTRY_ROUTE,
       ...(normalizedContext.sessionId ? { sessionId: normalizedContext.sessionId } : {}),
       ...(normalizedContext.turnstileToken ? { turnstileToken: normalizedContext.turnstileToken } : {}),
       start: true,
@@ -365,6 +371,7 @@ export async function postContactSubmit(
     classification: payload.classification ?? '',
     intent: payload.intent ?? undefined,
     source: resolveChatTrafficSource(payload.entrySource ?? payload.source),
+    entryRoute: INITIAL_ENTRY_ROUTE,
     turnstileToken: payload.turnstileToken,
     website: payload.website ?? '',
   };

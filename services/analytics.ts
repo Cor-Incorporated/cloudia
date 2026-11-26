@@ -21,6 +21,7 @@
  *
  * The measurement ID is a build-time value (VITE_GA4_ID). Unset means off.
  */
+import { readContactEntryRoute } from '../constants/contactEntryRoute';
 import { parseEntrySourceFromSearch, type EntrySource } from '../constants/entrySources';
 import { parseContactIntent } from '../constants/intents';
 import type { ContactIntent } from '../types';
@@ -102,6 +103,8 @@ export function allowedParams(search: string): AnalyticsParams {
   const intent = parseContactIntent(query.get('intent'));
   const entrySource = parseEntrySourceFromSearch(search);
   const utm = UTM_KEYS.flatMap((key): [string, string][] => {
+    // Do not turn a noncanonical or duplicate source into a Grift link on reload.
+    if (key === 'utm_source' && readContactEntryRoute(search) !== 'griftaiLink') return [];
     const value = (query.get(key) ?? '').trim().toLowerCase();
     const allowed = (ALLOWED_UTM[key] as readonly string[]).find((candidate) => candidate === value);
     return allowed ? [[key, allowed]] : [];
