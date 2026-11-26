@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INDUSTRY_ENTRY_SOURCES } from '../constants/entrySources';
+import { readContactEntryRoute } from '../constants/contactEntryRoute';
 import { industryContextLine } from '../constants/industryGuidance';
 import {
   ContactChatUnavailableError,
@@ -15,6 +16,15 @@ afterEach(() => {
 });
 
 describe('contactChatClient', () => {
+  it.each([
+    ['?utm_source=grift', 'griftaiLink'],
+    ['?intent=grift-team-beta', 'corJpDirect'],
+    ['?site=griftai&entryRoute=griftaiLink', 'corJpDirect'],
+    ['?utm_source=grift&utm_source=grift', 'corJpDirect'],
+    ['?utm_source=GRIFT', 'corJpDirect'],
+  ])('derives attribution from the exact Grift query key: %s', (query, expected) => {
+    expect(readContactEntryRoute(query)).toBe(expected);
+  });
   it('starts an intent-scoped conversation without a synthetic user message', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       reply: 'まず業種を教えてください。',
@@ -38,6 +48,7 @@ describe('contactChatClient', () => {
       locale: 'ja',
       intent: 'local-llm-poc',
       source: 'cloudia',
+      entryRoute: 'corJpDirect',
       start: true,
       event: 'intent_selected',
     });
@@ -88,6 +99,7 @@ describe('contactChatClient', () => {
       intent: 'local-llm-poc',
       sessionId: 'session-123',
       source: 'cloudia',
+      entryRoute: 'corJpDirect',
     });
   });
 
@@ -276,6 +288,7 @@ describe('contactChatClient', () => {
       locale: 'en',
       intent: null,
       source: 'cloudia',
+      entryRoute: 'corJpDirect',
       messages: [],
     });
   });
